@@ -7,8 +7,17 @@ export async function middleware(req) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // If not logged in and not on login page → redirect to login
-  if (!session && !req.nextUrl.pathname.startsWith('/login') && !req.nextUrl.pathname.startsWith('/overlay')) {
+  const isLoginPage = req.nextUrl.pathname.startsWith('/login')
+  const isOverlay = req.nextUrl.pathname.startsWith('/overlay')
+
+  // Allow overlays always (for OBS/browser)
+  if (isOverlay) return res
+
+  // Allow login page always
+  if (isLoginPage) return res
+
+  // Not logged in → redirect to login
+  if (!session) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
