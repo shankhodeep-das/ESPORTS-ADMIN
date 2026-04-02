@@ -2,17 +2,34 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/app/lib/supabase'
-import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 export default function Dashboard() {
   const router = useRouter()
+  const supabaseAuth = createClientComponentClient()
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [time, setTime] = useState('')
+  const [liveMatch, setLiveMatch] = useState(null)
+
+  // Live Clock
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date()
+      setTime(now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     fetchMatches()
+    checkLiveMatch()
   }, [])
 
   async function fetchMatches() {
@@ -20,34 +37,59 @@ export default function Dashboard() {
       .from('matches')
       .select('*')
       .order('created_at', { ascending: false })
-
-    if (error) {
-      console.log('Error:', error)
-    } else {
-      setMatches(data)
-    }
+    if (error) console.log('Error:', error)
+    else setMatches(data)
     setLoading(false)
   }
 
-  const supabase = createClientComponentClient()
+  async function checkLiveMatch() {
+    const { data } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('status', 'live')
+      .limit(1)
+      .single()
+    setLiveMatch(data)
+  }
 
   async function handleLogout() {
-  await supabase.auth.signOut()
-  router.refresh()
-  router.push('/login')
+    await supabaseAuth.auth.signOut()
+    router.refresh()
+    router.push('/login')
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-6">
+    <main className="min-h-screen bg-[#0a0a0c] text-white p-6">
+
+      {/* Clock */}
+      <div className="text-center mb-6">
+        <p className="text-2xl font-black text-white tracking-widest font-mono">
+          {time}
+        </p>
+        <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
+          Indian Standard Time (IST)
+        </p>
+      </div>
 
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-green-400">
-          📊 Dashboard
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-[#10b981]">
+            📊 Dashboard
+          </h1>
+          {liveMatch && (
+            <div className="mt-2 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-full px-3 py-1 w-fit">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
+              <span className="text-red-400 text-xs font-bold uppercase tracking-widest">
+                {liveMatch.title} is LIVE
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-4">
           <Link href="/match/create">
-            <button className="bg-green-500 hover:bg-green-600 text-black font-bold px-4 py-2 rounded-lg">
+            <button className="bg-[#10b981] hover:bg-[#1fd998] text-black font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-widest transition-all hover:-translate-y-1">
               ➕ New Match
             </button>
           </Link>
@@ -61,25 +103,25 @@ export default function Dashboard() {
       </div>
 
       {loading && (
-        <p className="text-gray-400">Loading matches...</p>
+        <p className="text-slate-400">Loading matches...</p>
       )}
 
       {!loading && matches.length === 0 && (
-        <p className="text-gray-400">No matches yet. Create one!</p>
+        <p className="text-slate-400">No matches yet. Create one!</p>
       )}
 
       <div className="flex flex-col gap-4 max-w-2xl">
         {matches.map((match) => (
           <div
             key={match.id}
-            className="bg-gray-800 rounded-xl p-5 border border-gray-700"
+            className="bg-white/5 rounded-xl p-5 border border-white/10 hover:border-[#10b981]/30 transition-all"
           >
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold text-white">
                   {match.title}
                 </h2>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-slate-400 text-sm mt-1">
                   🗺️ {match.map} &nbsp;|&nbsp; 🔄 {match.round}
                 </p>
               </div>
@@ -96,7 +138,7 @@ export default function Dashboard() {
                 </span>
 
                 <Link href={`/match/${match.id}`}>
-                  <button className="bg-green-500 hover:bg-green-600 text-black text-sm font-bold px-3 py-1 rounded-lg">
+                  <button className="bg-[#10b981] hover:bg-[#1fd998] text-black text-sm font-bold px-3 py-1 rounded-lg transition-all">
                     Manage →
                   </button>
                 </Link>
