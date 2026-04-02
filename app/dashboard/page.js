@@ -7,13 +7,11 @@ import Link from 'next/link'
 
 export default function Dashboard() {
   const router = useRouter()
-  const supabaseAuth = createClientComponentClient()
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [time, setTime] = useState('')
   const [liveMatch, setLiveMatch] = useState(null)
 
-  // Live Clock
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date()
@@ -52,15 +50,14 @@ export default function Dashboard() {
   }
 
   async function handleLogout() {
-  await supabase.auth.signOut()
-  document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-  router.push('/login')
-}
+    await supabase.auth.signOut()
+    document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+    router.push('/login')
+  }
 
   return (
     <main className="min-h-screen bg-[#0a0a0c] text-white p-6">
 
-      {/* Clock */}
       <div className="text-center mb-6">
         <p className="text-2xl font-black text-white tracking-widest font-mono">
           {time}
@@ -70,7 +67,6 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-[#10b981]">
