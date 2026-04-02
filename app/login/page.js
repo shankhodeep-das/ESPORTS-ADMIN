@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/app/lib/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 
 export default function Login() {
   const router = useRouter()
+  const supabase = createClientComponentClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -27,12 +28,7 @@ export default function Login() {
       return
     }
 
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
-      document.cookie = `sb-access-token=${session.access_token}; path=/`
-      document.cookie = `sb-refresh-token=${session.refresh_token}; path=/`
-    }
-
+    router.refresh()
     router.push('/dashboard')
   }
 
