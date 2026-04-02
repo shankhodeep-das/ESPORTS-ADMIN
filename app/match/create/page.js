@@ -104,20 +104,29 @@ export default function CreateMatch() {
                 </button>
               ))}
             </div>
+              {/* Custom Game Toggle + Input */}
+            <button
+              type="button"
+              onClick={() => setCustomGame(customGame === null ? '' : null)}
+              className="text-xs text-slate-500 hover:text-[#10b981] transition-colors text-left"
+            >
+              {customGame === null ? '+ Use custom game name' : '− Use preset games'}
+            </button>
 
-            {/* Custom Game Input */}
-            <input
-              type="text"
-              placeholder="Or type a custom game name..."
-              value={customGame}
-              onChange={(e) => {
-                setCustomGame(e.target.value)
-                setMap('')
-              }}
+            {customGame !== null && (
+              <input
+                type="text"
+                placeholder="Type custom game name..."
+                value={customGame}
+                onChange={(e) => {
+                  setCustomGame(e.target.value)
+                  setMap('')
+                }}
               className="w-full px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm
-                         placeholder:text-slate-600 focus:outline-none focus:border-[#10b981] focus:ring-4 focus:ring-[#10b981]/10
-                         transition-all duration-300"
-            />
+                        placeholder:text-slate-600 focus:outline-none focus:border-[#10b981] focus:ring-4 focus:ring-[#10b981]/10
+                        transition-all duration-300"
+              />
+            )}
           </div>
 
           {/* Map Input with Datalist */}
