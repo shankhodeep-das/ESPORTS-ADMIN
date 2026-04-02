@@ -25,6 +25,10 @@ export default function Dashboard() {
     }
     setLoading(false)
   }
+  async function handleLogout() {
+  await supabase.auth.signOut()
+  router.push('/login')
+  }
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6">
@@ -84,6 +88,12 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+        <button
+          onClick={handleLogout}
+          className="text-xs text-red-400 hover:text-red-300 font-bold uppercase tracking-widest"
+        >
+          Logout
+        </button>
       </div>
 
     </main>
