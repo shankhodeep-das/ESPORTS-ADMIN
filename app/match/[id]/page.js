@@ -11,6 +11,8 @@ export default function ManageMatch() {
   const [match, setMatch] = useState(null)
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editingTeamId, setEditingTeamId] = useState(null)
+  const [editingName, setEditingName] = useState('')
 
   useEffect(() => {
     fetchMatch()
@@ -221,6 +223,42 @@ export default function ManageMatch() {
   fetchMatch()
 }
 
+async function updateTeamName(team) {
+  if (!editingName.trim()) return
+  
+  await supabase
+    .from('teams')
+    .update({ name: editingName })
+    .eq('id', team.id)
+
+  await supabase.from('activity_logs').insert([{
+    match_id: id,
+    team_id: team.id,
+    team_name: editingName,
+    action: 'team_renamed',
+    message: `Team renamed from ${team.name} to ${editingName}`
+  }])
+
+  setEditingTeamId(null)
+  setEditingName('')
+  fetchTeams()
+}
+
+async function updateMatchStatus(newStatus) {
+  await supabase
+    .from('matches')
+    .update({ status: newStatus })
+    .eq('id', id)
+
+  await supabase.from('activity_logs').insert([{
+    match_id: id,
+    action: 'status_changed',
+    message: `Match status changed to ${newStatus.toUpperCase()}`
+  }])
+
+  fetchMatch()
+}
+
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6">
 
@@ -234,10 +272,30 @@ export default function ManageMatch() {
           <h1 className="text-2xl font-bold text-green-400 mt-1">
             {match?.title}
           </h1>
-          <p className="text-gray-400 text-sm">
-            🗺️ {match?.map} | 🔄 {match?.round} | 
-            <span className="text-yellow-400 ml-1">{match?.status?.toUpperCase()}</span>
+          <p className="text-slate-400 text-sm mb-3">
+            🗺️ {match?.map} &nbsp;|&nbsp; 🔄 {match?.round}
           </p>
+
+          {/* Status Buttons */}
+          <div className="flex gap-2">
+            {['waiting', 'live', 'finished'].map((s) => (
+            <button
+              key={s}
+              onClick={() => updateMatchStatus(s)}
+              className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-all ${
+                match?.status === s
+                ? s === 'live'
+                  ? 'bg-red-500 text-white'
+                  : s === 'waiting'
+                  ? 'bg-yellow-500 text-black'
+                  : 'bg-gray-500 text-white'
+                : 'bg-white/5 text-slate-400 hover:bg-white/10'
+              }`}
+            >
+              {s === 'live' && '🔴 '}{s}
+            </button>
+          ))}
+        </div>
         </div>
 
         <button
@@ -257,9 +315,44 @@ export default function ManageMatch() {
           <div key={team.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700">
 
             <div className="flex justify-between items-center mb-3">
-              <h2 className="font-bold text-lg">
-                SLOT {team.slot_number} — {team.name}
-              </h2>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-sm font-bold">
+                  SLOT {team.slot_number}
+                </span>
+                {editingTeamId === team.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && updateTeamName(team)}
+                      className="bg-gray-700 border border-green-500 rounded px-2 py-1 text-white text-sm font-bold focus:outline-none w-32"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => updateTeamName(team)}
+                      className="text-green-400 text-xs font-bold hover:text-green-300"
+                    >
+                      ✓ Save
+                    </button>
+                    <button
+                      onClick={() => setEditingTeamId(null)}
+                      className="text-red-400 text-xs font-bold hover:text-red-300"
+                    >
+                      ✗
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditingTeamId(team.id)
+                      setEditingName(team.name)
+                    }}
+                    className="font-bold text-lg text-white hover:text-[#10b981] transition-colors"
+                  >
+                    {team.name} ✏️
+                  </button>
+                )}
+              </div>
               <span className="text-green-400 font-bold text-lg">
                 🎯 {team.total_kills} kills
               </span>
