@@ -1,23 +1,24 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function middleware(req) {
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
 
-  const { data: { session } } = await supabase.auth.getSession()
-
-  const isLoginPage = req.nextUrl.pathname.startsWith('/login')
-  const isOverlay = req.nextUrl.pathname.startsWith('/overlay')
-
-  // Allow overlays always (for OBS/browser)
-  if (isOverlay) return res
+  // Allow overlays always
+  if (req.nextUrl.pathname.startsWith('/overlay')) {
+    return res
+  }
 
   // Allow login page always
-  if (isLoginPage) return res
+  if (req.nextUrl.pathname.startsWith('/login')) {
+    return res
+  }
 
-  // Not logged in → redirect to login
-  if (!session) {
+  // Check for session cookie
+  const token = req.cookies.get('sb-access-token')?.value ||
+                req.cookies.get('sb-refresh-token')?.value
+
+  if (!token) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
@@ -25,5 +26,7 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ]
 }

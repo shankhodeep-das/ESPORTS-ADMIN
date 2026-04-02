@@ -29,8 +29,10 @@ export default function Dashboard() {
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push('/login')
+  await supabase.auth.signOut()
+  document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+  document.cookie = 'sb-refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+  router.push('/login')
   }
 
   return (

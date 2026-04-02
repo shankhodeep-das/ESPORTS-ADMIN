@@ -27,6 +27,12 @@ export default function Login() {
       return
     }
 
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      document.cookie = `sb-access-token=${session.access_token}; path=/`
+      document.cookie = `sb-refresh-token=${session.refresh_token}; path=/`
+    }
+
     router.push('/dashboard')
   }
 
