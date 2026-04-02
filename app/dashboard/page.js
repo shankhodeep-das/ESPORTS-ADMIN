@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/app/lib/supabase'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 export default function Dashboard() {
+  const router = useRouter()
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -25,23 +27,33 @@ export default function Dashboard() {
     }
     setLoading(false)
   }
+
   async function handleLogout() {
-  await supabase.auth.signOut()
-  router.push('/login')
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6">
 
+      {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-green-400">
           📊 Dashboard
         </h1>
-        <Link href="/match/create">
-          <button className="bg-green-500 hover:bg-green-600 text-black font-bold px-4 py-2 rounded-lg">
-            ➕ New Match
+        <div className="flex items-center gap-4">
+          <Link href="/match/create">
+            <button className="bg-green-500 hover:bg-green-600 text-black font-bold px-4 py-2 rounded-lg">
+              ➕ New Match
+            </button>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-xs text-red-400 hover:text-red-300 font-bold uppercase tracking-widest"
+          >
+            Logout
           </button>
-        </Link>
+        </div>
       </div>
 
       {loading && (
@@ -88,12 +100,6 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
-        <button
-          onClick={handleLogout}
-          className="text-xs text-red-400 hover:text-red-300 font-bold uppercase tracking-widest"
-        >
-          Logout
-        </button>
       </div>
 
     </main>
