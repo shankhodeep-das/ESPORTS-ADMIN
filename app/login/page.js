@@ -1,12 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/app/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export default function Login() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -17,7 +16,7 @@ export default function Login() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
@@ -28,7 +27,10 @@ export default function Login() {
       return
     }
 
-    router.refresh()
+    if (data.session) {
+      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=3600`
+    }
+
     router.push('/dashboard')
   }
 
@@ -46,7 +48,6 @@ export default function Login() {
         </header>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-6">
-
           <div className="flex flex-col gap-2 group/input">
             <label className="text-xs font-bold tracking-widest text-slate-400 uppercase ml-1 transition-colors group-focus-within/input:text-[#10b981]">
               Email
@@ -92,7 +93,6 @@ export default function Login() {
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
-
         </form>
       </div>
     </main>

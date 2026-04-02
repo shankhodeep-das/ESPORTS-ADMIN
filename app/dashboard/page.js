@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/app/lib/supabase'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -53,10 +52,10 @@ export default function Dashboard() {
   }
 
   async function handleLogout() {
-    await supabaseAuth.auth.signOut()
-    router.refresh()
-    router.push('/login')
-  }
+  await supabase.auth.signOut()
+  document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+  router.push('/login')
+}
 
   return (
     <main className="min-h-screen bg-[#0a0a0c] text-white p-6">
