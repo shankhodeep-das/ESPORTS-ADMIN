@@ -34,22 +34,47 @@ export default function MainOverlay() {
   }, [])
 
   async function fetchTeams() {
-    const { data } = await supabase
-      .from('teams')
-      .select('*, players(*)')
-      .order('total_kills', { ascending: false })
+  // Step 1: Find live match
+  const { data: liveMatch, error: matchError } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('status', 'live')
+    .limit(1)
+    .single()
 
-    if (!data) return
-    setTeams(data)
+  // No live match found
+  if (matchError || !liveMatch) {
+    console.log('No live match found')
+    setTeams([])
+    return
+  }
 
-    const aliveTeams = data.filter(t =>
-      t.players?.some(p => p.alive === true)
-    )
+  console.log('Live match found:', liveMatch.id, liveMatch.title)
 
-    if (aliveTeams.length <= 4 && aliveTeams.length > 0) {
-      setOverlayState('final4')
-    } else {
-      setOverlayState('slotlist')
+  // Step 2: Get teams only from live match
+  const { data, error } = await supabase
+    .from('teams')
+    .select('*, players(*)')
+    .eq('match_id', liveMatch.id)
+    .order('total_kills', { ascending: false })
+
+  console.log('Teams found:', data?.length)
+
+  if (error || !data) {
+    setTeams([])
+    return
+  }
+
+  setTeams(data)
+
+  const aliveTeams = data.filter(t =>
+    t.players?.some(p => p.alive === true)
+  )
+
+  if (aliveTeams.length <= 4 && aliveTeams.length > 0) {
+    setOverlayState('final4')
+  } else {
+    setOverlayState('slotlist')
     }
   }
 
