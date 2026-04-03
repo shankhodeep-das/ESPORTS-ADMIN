@@ -14,10 +14,12 @@ export default function ManageMatch() {
   const [editingTeamId, setEditingTeamId] = useState(null)
   const [editingName, setEditingName] = useState('')
   const [addingTeam, setAddingTeam] = useState(false)
+  const [settings, setSettings] = useState(null)
 
   useEffect(() => {
     fetchMatch()
     fetchTeams()
+    fetchSettings()
   }, [])
 
   async function fetchMatch() {
@@ -27,6 +29,15 @@ export default function ManageMatch() {
       .eq('id', id)
       .single()
     setMatch(data)
+  }
+
+  async function fetchSettings() {
+    const { data } = await supabase
+      .from('overlay_settings')
+      .select('*')
+      .eq('match_id', id)
+      .single()
+    setSettings(data)
   }
 
   async function fetchTeams() {
@@ -40,9 +51,8 @@ export default function ManageMatch() {
   }
 
   async function addTeam() {
-    if (addingTeam) return  
+    if (addingTeam) return
     setAddingTeam(true)
-
     const slotNumber = teams.length + 1
     const { data: team } = await supabase
       .from('teams')
@@ -55,7 +65,6 @@ export default function ManageMatch() {
       .select()
       .single()
 
-    // Add 4 players automatically
     await supabase.from('players').insert([
       { team_id: team.id, name: 'P1' },
       { team_id: team.id, name: 'P2' },
@@ -63,7 +72,6 @@ export default function ManageMatch() {
       { team_id: team.id, name: 'P4' },
     ])
 
-    // Log it
     await supabase.from('activity_logs').insert([{
       match_id: id,
       team_name: team.name,
@@ -71,45 +79,8 @@ export default function ManageMatch() {
       message: `Team ${team.name} added to slot ${slotNumber}`
     }])
 
-    fetchTeams()
+    await fetchTeams()
     setAddingTeam(false)
-  }
-
-  async function addKill(team) {
-    const newKills = team.total_kills + 1
-    await supabase
-      .from('teams')
-      .update({ total_kills: newKills })
-      .eq('id', team.id)
-
-    await supabase.from('activity_logs').insert([{
-      match_id: id,
-      team_id: team.id,
-      team_name: team.name,
-      action: 'kill_added',
-      message: `+1 Kill added to ${team.name} (Total: ${newKills})`
-    }])
-
-    fetchTeams()
-  }
-
-  async function removeKill(team) {
-    if (team.total_kills === 0) return
-    const newKills = team.total_kills - 1
-    await supabase
-      .from('teams')
-      .update({ total_kills: newKills })
-      .eq('id', team.id)
-
-    await supabase.from('activity_logs').insert([{
-      match_id: id,
-      team_id: team.id,
-      team_name: team.name,
-      action: 'kill_removed',
-      message: `Kill removed from ${team.name} (Total: ${newKills})`
-    }])
-
-    fetchTeams()
   }
 
   async function eliminatePlayer(player, team) {
@@ -149,46 +120,44 @@ export default function ManageMatch() {
   }
 
   async function updatePlayerKills(player, team, value) {
-  const kills = parseInt(value) || 0
+    const kills = parseInt(value) || 0
+    await supabase
+      .from('players')
+      .update({ kills })
+      .eq('id', player.id)
 
-  await supabase
-    .from('players')
-    .update({ kills })
-    .eq('id', player.id)
+    const updatedPlayers = team.players.map(p =>
+      p.id === player.id ? { ...p, kills } : p
+    )
+    const totalKills = updatedPlayers.reduce((sum, p) => sum + (p.kills || 0), 0)
 
-  // Recalculate team total from all players
-  const updatedPlayers = team.players.map(p =>
-    p.id === player.id ? { ...p, kills } : p
-  )
-  const totalKills = updatedPlayers.reduce((sum, p) => sum + (p.kills || 0), 0)
+    await supabase
+      .from('teams')
+      .update({ total_kills: totalKills })
+      .eq('id', team.id)
 
-  await supabase
-    .from('teams')
-    .update({ total_kills: totalKills })
-    .eq('id', team.id)
+    await supabase.from('activity_logs').insert([{
+      match_id: id,
+      team_id: team.id,
+      team_name: team.name,
+      player_name: player.name,
+      action: 'kill_added',
+      message: `${player.name} kills updated to ${kills} in ${team.name} (Total: ${totalKills})`
+    }])
 
-  await supabase.from('activity_logs').insert([{
-    match_id: id,
-    team_id: team.id,
-    team_name: team.name,
-    player_name: player.name,
-    action: 'kill_added',
-    message: `${player.name} kills updated to ${kills} in ${team.name} (Team Total: ${totalKills})`
-  }])
-
-  fetchTeams()
+    fetchTeams()
   }
 
   async function declareWinner(team) {
-  await supabase
-    .from('matches')
-    .update({ status: 'finished' })
-    .eq('id', id)
+    await supabase
+      .from('matches')
+      .update({ status: 'finished' })
+      .eq('id', id)
 
-  await supabase
-    .from('teams')
-    .update({ placement: 1 })
-    .eq('id', team.id)
+    await supabase
+      .from('teams')
+      .update({ placement: 1 })
+      .eq('id', team.id)
 
     await supabase.from('activity_logs').insert([{
       match_id: id,
@@ -201,72 +170,75 @@ export default function ManageMatch() {
     fetchMatch()
   }
 
+  async function updateTeamName(team) {
+    if (!editingName.trim()) return
+    await supabase
+      .from('teams')
+      .update({ name: editingName })
+      .eq('id', team.id)
+
+    await supabase.from('activity_logs').insert([{
+      match_id: id,
+      team_id: team.id,
+      team_name: editingName,
+      action: 'team_renamed',
+      message: `Team renamed from ${team.name} to ${editingName}`
+    }])
+
+    setEditingTeamId(null)
+    setEditingName('')
+    fetchTeams()
+  }
+
+  async function updateMatchStatus(newStatus) {
+    await supabase
+      .from('matches')
+      .update({ status: newStatus })
+      .eq('id', id)
+
+    await supabase.from('activity_logs').insert([{
+      match_id: id,
+      action: 'status_changed',
+      message: `Match status changed to ${newStatus.toUpperCase()}`
+    }])
+
+    fetchMatch()
+  }
+
+  async function getOrCreateSettings() {
+    const { data } = await supabase
+      .from('overlay_settings')
+      .select('*')
+      .eq('match_id', id)
+      .single()
+    if (data) return data
+    const { data: newSettings } = await supabase
+      .from('overlay_settings')
+      .insert([{ match_id: id }])
+      .select()
+      .single()
+    return newSettings
+  }
+
+  async function updateOverlaySetting(key, value) {
+    const s = await getOrCreateSettings()
+    await supabase
+      .from('overlay_settings')
+      .update({ [key]: value })
+      .eq('id', s.id)
+    fetchSettings()
+  }
+
   if (loading) return (
     <main className="min-h-screen bg-gray-950 text-white p-6">
       <p className="text-gray-400">Loading...</p>
     </main>
   )
-  async function declareWinner(team) {
-  await supabase
-    .from('matches')
-    .update({ status: 'finished' })
-    .eq('id', id)
-
-  await supabase
-    .from('teams')
-    .update({ placement: 1 })
-    .eq('id', team.id)
-
-  await supabase.from('activity_logs').insert([{
-    match_id: id,
-    team_name: team.name,
-    action: 'winner',
-    message: `🏆 Winner declared: ${team.name}`
-  }])
-
-  fetchTeams()
-  fetchMatch()
-}
-
-async function updateTeamName(team) {
-  if (!editingName.trim()) return
-  
-  await supabase
-    .from('teams')
-    .update({ name: editingName })
-    .eq('id', team.id)
-
-  await supabase.from('activity_logs').insert([{
-    match_id: id,
-    team_id: team.id,
-    team_name: editingName,
-    action: 'team_renamed',
-    message: `Team renamed from ${team.name} to ${editingName}`
-  }])
-
-  setEditingTeamId(null)
-  setEditingName('')
-  fetchTeams()
-}
-
-async function updateMatchStatus(newStatus) {
-  await supabase
-    .from('matches')
-    .update({ status: newStatus })
-    .eq('id', id)
-
-  await supabase.from('activity_logs').insert([{
-    match_id: id,
-    action: 'status_changed',
-    message: `Match status changed to ${newStatus.toUpperCase()}`
-  }])
-
-  fetchMatch()
-}
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6">
 
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <Link href="/dashboard">
@@ -284,31 +256,128 @@ async function updateMatchStatus(newStatus) {
           {/* Status Buttons */}
           <div className="flex gap-2">
             {['waiting', 'live', 'finished'].map((s) => (
-            <button
-              key={s}
-              onClick={() => updateMatchStatus(s)}
-              className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-all ${
-                match?.status === s
-                ? s === 'live'
-                  ? 'bg-red-500 text-white'
-                  : s === 'waiting'
-                  ? 'bg-yellow-500 text-black'
-                  : 'bg-gray-500 text-white'
-                : 'bg-white/5 text-slate-400 hover:bg-white/10'
-              }`}
-            >
-              {s === 'live' && '🔴 '}{s}
-            </button>
-          ))}
-        </div>
+              <button
+                key={s}
+                onClick={() => updateMatchStatus(s)}
+                className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-all ${
+                  match?.status === s
+                    ? s === 'live'
+                      ? 'bg-red-500 text-white'
+                      : s === 'waiting'
+                      ? 'bg-yellow-500 text-black'
+                      : 'bg-gray-500 text-white'
+                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {s === 'live' && '🔴 '}{s}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <button
-          onClick={addTeam}
-          className="bg-green-500 hover:bg-green-600 text-black font-bold px-4 py-2 rounded-lg"
-        >
-          {addingTeam ? 'Adding...' : '➕ Add Team'}
-        </button>
+        <div className="flex items-center gap-3">
+          <Link href={`/match/${id}/leaderboard`}>
+            <button className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-widest transition-all border border-yellow-500/30">
+              🏆 Leaderboard
+            </button>
+          </Link>
+          <button
+            onClick={addTeam}
+            disabled={addingTeam}
+            className="bg-green-500 hover:bg-green-600 text-black font-bold px-4 py-2 rounded-lg disabled:opacity-50"
+          >
+            {addingTeam ? 'Adding...' : '➕ Add Team'}
+          </button>
+        </div>
+      </div>
+
+      {/* Overlay Controls */}
+      <div className="max-w-2xl mb-6 bg-white/5 rounded-xl p-4 border border-white/10">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+          🎮 Overlay Controls
+        </h3>
+        <div className="flex flex-wrap gap-3">
+
+          {/* Leaderboard Mode */}
+          <div className="flex flex-col gap-1">
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+              Leaderboard Mode
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => updateOverlaySetting('leaderboard_mode', 'match')}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all ${
+                  settings?.leaderboard_mode === 'match' || !settings
+                    ? 'bg-[#10b981] text-black'
+                    : 'bg-white/5 text-slate-400 border border-white/10'
+                }`}
+              >
+                Match
+              </button>
+              <button
+                onClick={() => updateOverlaySetting('leaderboard_mode', 'overall')}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all ${
+                  settings?.leaderboard_mode === 'overall'
+                    ? 'bg-[#10b981] text-black'
+                    : 'bg-white/5 text-slate-400 border border-white/10'
+                }`}
+              >
+                Overall
+              </button>
+            </div>
+          </div>
+
+          {/* Show/Hide Leaderboard */}
+          <div className="flex flex-col gap-1">
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+              Leaderboard
+            </p>
+            <button
+              onClick={() => updateOverlaySetting('show_leaderboard', !settings?.show_leaderboard)}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all ${
+                settings?.show_leaderboard !== false
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-red-500/20 text-red-400 border border-red-500/30'
+              }`}
+            >
+              {settings?.show_leaderboard !== false ? '👁️ Visible' : '🙈 Hidden'}
+            </button>
+          </div>
+
+          {/* Show/Hide Final 4 */}
+          <div className="flex flex-col gap-1">
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+              Final 4
+            </p>
+            <button
+              onClick={() => updateOverlaySetting('show_final4', !settings?.show_final4)}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all ${
+                settings?.show_final4 !== false
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-red-500/20 text-red-400 border border-red-500/30'
+              }`}
+            >
+              {settings?.show_final4 !== false ? '👁️ Visible' : '🙈 Hidden'}
+            </button>
+          </div>
+
+          {/* Copy Overlay URL */}
+          <div className="flex flex-col gap-1">
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+              Overlay URL
+            </p>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/overlay/main?match=${id}`)
+                alert('Copied!')
+              }}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all hover:bg-blue-500/30"
+            >
+              📋 Copy URL
+            </button>
+          </div>
+
+        </div>
       </div>
 
       {teams.length === 0 && (
@@ -382,13 +451,11 @@ async function updateMatchStatus(newStatus) {
                   key={player.id}
                   className="flex justify-between items-center gap-2"
                 >
-                  {/* Player Name */}
                   <span className={`text-sm w-8 font-bold ${
                     player.alive ? 'text-white' : 'text-gray-500 line-through'
                   }`}>
                     {player.name}
                   </span>
-                  {/* Kill Input */}
                   <input
                     type="number"
                     min="0"
@@ -402,13 +469,12 @@ async function updateMatchStatus(newStatus) {
                         : 'bg-gray-800 border-gray-700 text-gray-600 cursor-not-allowed'
                     }`}
                   />
-                  
                   <button
                     onClick={() => player.alive
                       ? eliminatePlayer(player, team)
                       : revivePlayer(player, team)
                     }
-                    className={`text-xs px-2 py-1 rounded font-bold ${
+                    className={`text-xs px-2 py-1 rounded font-bold flex-1 ${
                       player.alive
                         ? 'bg-red-500 hover:bg-red-600 text-white'
                         : 'bg-gray-600 hover:bg-gray-500 text-white'
@@ -419,21 +485,26 @@ async function updateMatchStatus(newStatus) {
                 </div>
               ))}
             </div>
+
             <button
               onClick={() => declareWinner(team)}
               className="mt-3 w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 rounded-lg text-sm"
             >
               🏆 Declare Winner
             </button>
-        </div>
+
+          </div>
         ))}
       </div>
+
+      {/* Activity Log */}
       <div className="mt-8 max-w-2xl">
         <h2 className="text-xl font-bold text-green-400 mb-3">
           📋 Activity Log
         </h2>
         <ActivityLog matchId={id} />
       </div>
+
     </main>
   )
 }
