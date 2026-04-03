@@ -1,16 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/app/lib/supabase'
 
 export default function MainOverlay() {
   const [teams, setTeams] = useState([])
   const [overlayState, setOverlayState] = useState('slotlist')
   const [winner, setWinner] = useState(null)
+  const booyahDeclared = useRef(false)
 
   useEffect(() => {
     fetchTeams()
-    checkMatchStatus()
 
     const channel = supabase
       .channel('main-overlay')
@@ -18,22 +18,23 @@ export default function MainOverlay() {
         event: '*',
         schema: 'public',
         table: 'teams'
-      }, () => {
-        fetchTeams()
-        checkMatchStatus()
-      })
+      }, () => fetchTeams())
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'players'
       }, () => fetchTeams())
       .on('postgres_changes', {
-        event: '*',
+        event: 'UPDATE',
         schema: 'public',
         table: 'matches'
-      }, () => {
-        fetchTeams()
-        checkMatchStatus()
+      }, (payload) => {
+        if (payload.new.status === 'finished') {
+          checkWinner(payload.new.id)
+        } else if (payload.new.status === 'live') {
+          booyahDeclared.current = false
+          fetchTeams()
+        }
       })
       .subscribe()
 
@@ -41,6 +42,9 @@ export default function MainOverlay() {
   }, [])
 
   async function fetchTeams() {
+    // Don't override booyah screen
+    if (booyahDeclared.current) return
+
     const { data: liveMatch, error: matchError } = await supabase
       .from('matches')
       .select('*')
@@ -49,7 +53,6 @@ export default function MainOverlay() {
       .single()
 
     if (matchError || !liveMatch) {
-      console.log('No live match found')
       setTeams([])
       return
     }
@@ -78,27 +81,16 @@ export default function MainOverlay() {
     }
   }
 
-  async function checkMatchStatus() {
-    // Find finished match
-    const { data: finishedMatch } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('status', 'finished')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (!finishedMatch) return
-
-    // Find winner team directly
+  async function checkWinner(matchId) {
     const { data: winnerTeam } = await supabase
       .from('teams')
       .select('*')
-      .eq('match_id', finishedMatch.id)
+      .eq('match_id', matchId)
       .eq('placement', 1)
       .single()
 
     if (winnerTeam) {
+      booyahDeclared.current = true
       setWinner(winnerTeam)
       setOverlayState('booyah')
     }

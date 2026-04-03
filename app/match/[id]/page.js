@@ -13,6 +13,7 @@ export default function ManageMatch() {
   const [loading, setLoading] = useState(true)
   const [editingTeamId, setEditingTeamId] = useState(null)
   const [editingName, setEditingName] = useState('')
+  const [addingTeam, setAddingTeam] = useState(false)
 
   useEffect(() => {
     fetchMatch()
@@ -39,6 +40,9 @@ export default function ManageMatch() {
   }
 
   async function addTeam() {
+    if (addingTeam) return  
+    setAddingTeam(true)
+
     const slotNumber = teams.length + 1
     const { data: team } = await supabase
       .from('teams')
@@ -68,6 +72,7 @@ export default function ManageMatch() {
     }])
 
     fetchTeams()
+    setAddingTeam(false)
   }
 
   async function addKill(team) {
@@ -302,7 +307,7 @@ async function updateMatchStatus(newStatus) {
           onClick={addTeam}
           className="bg-green-500 hover:bg-green-600 text-black font-bold px-4 py-2 rounded-lg"
         >
-          ➕ Add Team
+          {addingTeam ? 'Adding...' : '➕ Add Team'}
         </button>
       </div>
 
