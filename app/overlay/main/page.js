@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, Suspense } from 'react'
 import { supabase } from '@/app/lib/supabase'
 import { useSearchParams } from 'next/navigation'
 
 const PLACEMENT_POINTS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
 
-export default function MainOverlay() {
+function MainOverlayContent() {
   const searchParams = useSearchParams()
   const matchId = searchParams.get('match')
 
@@ -19,12 +19,10 @@ export default function MainOverlay() {
   const [currentMatch, setCurrentMatch] = useState(null)
   const booyahDeclared = useRef(false)
 
-  // Position and size state
   const [leaderboardPos, setLeaderboardPos] = useState({ x: 20, y: 20 })
   const [leaderboardSize, setLeaderboardSize] = useState({ width: 420, height: 600 })
   const [final4Pos, setFinal4Pos] = useState({ x: 600, y: 150 })
 
-  // Drag state
   const dragging = useRef(null)
   const resizing = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
@@ -136,14 +134,12 @@ export default function MainOverlay() {
   async function fetchPoints() {
     if (!matchId) return
 
-    // Match points
     const { data: mp } = await supabase
       .from('match_points')
       .select('*')
       .eq('match_id', matchId)
     setMatchPoints(mp || [])
 
-    // Overall tournament points
     const { data: matchData } = await supabase
       .from('matches')
       .select('tournament_id')
@@ -184,7 +180,6 @@ export default function MainOverlay() {
     }
   }
 
-  // Calculate points for display
   const teamsWithPoints = teams.map(team => {
     const mp = matchPoints.find(p => p.team_id === team.id)
     const op = overallPoints.find(p => p.team_name === team.name)
@@ -204,7 +199,6 @@ export default function MainOverlay() {
   const showLeaderboard = settings?.show_leaderboard !== false
   const showFinal4 = settings?.show_final4 !== false
 
-  // Drag handlers
   function startDrag(e, type) {
     dragging.current = type
     dragOffset.current = {
@@ -226,10 +220,10 @@ export default function MainOverlay() {
         y: e.clientY - dragOffset.current.y
       })
     } else if (resizing.current) {
-      setLeaderboardSize(prev => ({
+      setLeaderboardSize({
         width: Math.max(300, e.clientX - leaderboardPos.x),
         height: Math.max(200, e.clientY - leaderboardPos.y)
-      }))
+      })
     }
   }
 
@@ -238,7 +232,6 @@ export default function MainOverlay() {
     resizing.current = false
   }
 
-  // BOOYAH STATE
   if (overlayState === 'booyah') {
     return (
       <main className="min-h-screen bg-black/90 flex items-center justify-center">
@@ -267,7 +260,6 @@ export default function MainOverlay() {
       onMouseUp={stopDrag}
       onMouseLeave={stopDrag}
     >
-
       {/* LEADERBOARD PANEL */}
       {showLeaderboard && overlayState === 'leaderboard' && (
         <div
@@ -279,7 +271,6 @@ export default function MainOverlay() {
             height: leaderboardSize.height,
           }}
         >
-          {/* Drag Handle */}
           <div
             className="bg-gray-900/95 border border-gray-700 rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing flex justify-between items-center"
             onMouseDown={(e) => startDrag(e, 'leaderboard')}
@@ -292,7 +283,6 @@ export default function MainOverlay() {
             </span>
           </div>
 
-          {/* Table */}
           <div
             className="bg-gray-900/90 border-x border-gray-700 overflow-y-auto"
             style={{ height: leaderboardSize.height - 70 }}
@@ -352,7 +342,6 @@ export default function MainOverlay() {
             </table>
           </div>
 
-          {/* Resize Handle */}
           <div
             className="bg-gray-900/95 border border-gray-700 rounded-b-xl h-5 cursor-se-resize flex items-center justify-center"
             onMouseDown={(e) => { resizing.current = true; e.preventDefault() }}
@@ -371,7 +360,6 @@ export default function MainOverlay() {
             top: final4Pos.y,
           }}
         >
-          {/* Drag Handle */}
           <div
             className="bg-yellow-900/80 border border-yellow-500/50 rounded-t-xl px-4 py-2 cursor-grab active:cursor-grabbing flex items-center gap-2"
             onMouseDown={(e) => startDrag(e, 'final4')}
@@ -383,7 +371,6 @@ export default function MainOverlay() {
             <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"/>
           </div>
 
-          {/* Teams */}
           <div className="bg-black/70 border-x border-b border-yellow-500/30 rounded-b-xl p-3 flex flex-col gap-2 min-w-64">
             {aliveTeams.map((team, index) => (
               <div
@@ -410,7 +397,14 @@ export default function MainOverlay() {
           </div>
         </div>
       )}
-
     </main>
+  )
+}
+
+export default function MainOverlay() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-transparent"/>}>
+      <MainOverlayContent />
+    </Suspense>
   )
 }
