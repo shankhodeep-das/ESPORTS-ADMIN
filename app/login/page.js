@@ -43,7 +43,7 @@ export default function Login() {
             Admin Login
           </h1>
           <p className="text-slate-500 text-xs uppercase tracking-widest mt-2">
-            Tournament Control Panel
+            ENTER YOUR CREDENTIALS TO ACCESS THE DASHBOARD
           </p>
         </header>
 
