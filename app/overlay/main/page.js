@@ -10,6 +10,7 @@ export default function MainOverlay() {
 
   useEffect(() => {
     fetchTeams()
+    checkMatchStatus()
 
     const channel = supabase
       .channel('main-overlay')
@@ -17,7 +18,10 @@ export default function MainOverlay() {
         event: '*',
         schema: 'public',
         table: 'teams'
-      }, () => fetchTeams())
+      }, () => {
+        fetchTeams()
+        checkMatchStatus()
+      })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -27,85 +31,76 @@ export default function MainOverlay() {
         event: '*',
         schema: 'public',
         table: 'matches'
-      }, () => checkMatchStatus())
+      }, () => {
+        fetchTeams()
+        checkMatchStatus()
+      })
       .subscribe()
 
     return () => supabase.removeChannel(channel)
   }, [])
 
   async function fetchTeams() {
-  // Step 1: Find live match
-  const { data: liveMatch, error: matchError } = await supabase
-    .from('matches')
-    .select('*')
-    .eq('status', 'live')
-    .limit(1)
-    .single()
+    const { data: liveMatch, error: matchError } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('status', 'live')
+      .limit(1)
+      .single()
 
-  // No live match found
-  if (matchError || !liveMatch) {
-    console.log('No live match found')
-    setTeams([])
-    return
-  }
+    if (matchError || !liveMatch) {
+      console.log('No live match found')
+      setTeams([])
+      return
+    }
 
-  console.log('Live match found:', liveMatch.id, liveMatch.title)
+    const { data, error } = await supabase
+      .from('teams')
+      .select('*, players(*)')
+      .eq('match_id', liveMatch.id)
+      .order('total_kills', { ascending: false })
 
-  // Step 2: Get teams only from live match
-  const { data, error } = await supabase
-    .from('teams')
-    .select('*, players(*)')
-    .eq('match_id', liveMatch.id)
-    .order('total_kills', { ascending: false })
+    if (error || !data) {
+      setTeams([])
+      return
+    }
 
-  console.log('Teams found:', data?.length)
+    setTeams(data)
 
-  if (error || !data) {
-    setTeams([])
-    return
-  }
+    const aliveTeams = data.filter(t =>
+      t.players?.some(p => p.alive === true)
+    )
 
-  setTeams(data)
-
-  const aliveTeams = data.filter(t =>
-    t.players?.some(p => p.alive === true)
-  )
-
-  if (aliveTeams.length <= 4 && aliveTeams.length > 0) {
-    setOverlayState('final4')
-  } else {
-    setOverlayState('slotlist')
+    if (aliveTeams.length <= 4 && aliveTeams.length > 0) {
+      setOverlayState('final4')
+    } else {
+      setOverlayState('slotlist')
     }
   }
 
   async function checkMatchStatus() {
-    // First get live match
-    const { data: liveMatch } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('status', 'live')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+    // Find finished match
+    const { data: finishedMatch } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('status', 'finished')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
 
-    if (!liveMatch) {
-        setTeams([])
-    return
-    }
+    if (!finishedMatch) return
 
-    // Then get teams only from that match
-    const { data } = await supabase
-        .from('teams')
-        .select('*, players(*)')
-        .eq('match_id', liveMatch.id)
-        .order('total_kills', { ascending: false })
+    // Find winner team directly
+    const { data: winnerTeam } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('match_id', finishedMatch.id)
+      .eq('placement', 1)
+      .single()
 
-    if (data) {
-      const winnerTeam = data.teams?.find(t => t.placement === 1)
-      if (winnerTeam) {
-        setWinner(winnerTeam)
-        setOverlayState('booyah')
-      }
+    if (winnerTeam) {
+      setWinner(winnerTeam)
+      setOverlayState('booyah')
     }
   }
 
@@ -113,7 +108,6 @@ export default function MainOverlay() {
     t.players?.some(p => p.alive === true)
   )
 
-  // SLOTLIST STATE
   if (overlayState === 'slotlist') {
     return (
       <main className="min-h-screen bg-transparent p-4">
@@ -153,7 +147,6 @@ export default function MainOverlay() {
     )
   }
 
-  // FINAL 4 STATE
   if (overlayState === 'final4') {
     return (
       <main className="min-h-screen bg-black/80 flex items-center justify-center">
@@ -203,7 +196,6 @@ export default function MainOverlay() {
     )
   }
 
-  // BOOYAH STATE
   if (overlayState === 'booyah') {
     return (
       <main className="min-h-screen bg-black/90 flex items-center justify-center">

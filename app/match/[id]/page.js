@@ -175,15 +175,15 @@ export default function ManageMatch() {
   }
 
   async function declareWinner(team) {
-    await supabase
-      .from('matches')
-      .update({ status: 'finished' })
-      .eq('id', id)
+  await supabase
+    .from('matches')
+    .update({ status: 'finished' })
+    .eq('id', id)
 
-    await supabase
-      .from('teams')
-      .update({ placement: 1 })
-      .eq('id', team.id)
+  await supabase
+    .from('teams')
+    .update({ placement: 1 })
+    .eq('id', team.id)
 
     await supabase.from('activity_logs').insert([{
       match_id: id,
