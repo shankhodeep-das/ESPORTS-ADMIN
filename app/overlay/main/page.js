@@ -54,13 +54,26 @@ export default function MainOverlay() {
   }
 
   async function checkMatchStatus() {
+    // First get live match
+    const { data: liveMatch } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('status', 'live')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+    if (!liveMatch) {
+        setTeams([])
+    return
+    }
+
+    // Then get teams only from that match
     const { data } = await supabase
-      .from('matches')
-      .select('*, teams(*)')
-      .eq('status', 'finished')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+        .from('teams')
+        .select('*, players(*)')
+        .eq('match_id', liveMatch.id)
+        .order('total_kills', { ascending: false })
 
     if (data) {
       const winnerTeam = data.teams?.find(t => t.placement === 1)

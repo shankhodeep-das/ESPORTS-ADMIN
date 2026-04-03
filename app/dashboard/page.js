@@ -83,6 +83,13 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Link href="/tournaments">
+              <button className="bg-white/5 hover:bg-white/10 text-white font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-widest transition-all border border-white/10">
+                🏆 Tournaments
+              </button>
+            </Link>
+          </div>
           <Link href="/match/create">
             <button className="bg-[#10b981] hover:bg-[#1fd998] text-black font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-widest transition-all hover:-translate-y-1">
               ➕ New Match
