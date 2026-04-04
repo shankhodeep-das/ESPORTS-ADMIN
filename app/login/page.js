@@ -9,9 +9,10 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [time, setTime] = useState('')
   const [mounted, setMounted] = useState(false)
-  const [popup, setPopup] = useState(null) // 'granted' | 'denied' | null
+  const [popup, setPopup] = useState(null)
 
   useEffect(() => {
     setMounted(true)
@@ -29,501 +30,574 @@ export default function Login() {
   async function handleLogin(e) {
     e.preventDefault()
     setLoading(true)
+    setError('')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) {
       setPopup('denied')
-      setTimeout(() => setPopup(null), 3200)
+      setTimeout(() => setPopup(null), 3000)
       return
     }
     if (data.session) {
       document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=3600`
     }
     setPopup('granted')
-    setTimeout(() => router.push('/dashboard'), 2000)
+    setTimeout(() => router.push('/dashboard'), 1800)
   }
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         .sl-root {
           min-height: 100vh;
           display: flex;
-          background: #060809;
+          background: #06080a;
           font-family: 'Barlow Condensed', sans-serif;
-          isolation: isolate;
         }
 
-        /* LEFT PANEL */
+        /* ── LEFT PANEL ── */
         .sl-left {
           width: 45%;
           position: relative;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
-          padding: 36px 44px;
+          padding: 40px 44px;
           overflow: hidden;
-          background: #060e0a;
-          isolation: isolate;
+          background: #050a08;
         }
 
-        .sl-left-grid {
-          position: absolute; inset: 0;
-          background-image:
-            repeating-linear-gradient(0deg,  rgba(16,185,129,0.055) 0px, rgba(16,185,129,0.055) 1px, transparent 1px, transparent 44px),
-            repeating-linear-gradient(90deg, rgba(16,185,129,0.04)  0px, rgba(16,185,129,0.04)  1px, transparent 1px, transparent 44px);
-          pointer-events: none; z-index: 0;
-        }
-
-        .sl-left-glow {
+        /* Aurora orb 1 — teal/green bottom-left */
+        .sl-aurora-1 {
           position: absolute;
-          width: 420px; height: 420px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(16,185,129,0.22) 0%, transparent 65%);
-          bottom: -140px; left: -100px;
-          pointer-events: none; z-index: 0;
-          animation: sl-breathe 7s ease-in-out infinite alternate;
+          width: 480px; height: 480px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(16,185,129,0.55) 0%, rgba(16,185,129,0.15) 45%, transparent 70%);
+          bottom: -160px; left: -120px;
+          filter: blur(60px);
+          animation: sl-orb1 9s ease-in-out infinite alternate;
+          pointer-events: none;
         }
 
-        @keyframes sl-breathe {
-          from { opacity: 0.7; transform: scale(1); }
-          to   { opacity: 1;   transform: scale(1.1); }
+        /* Aurora orb 2 — purple top-right */
+        .sl-aurora-2 {
+          position: absolute;
+          width: 400px; height: 400px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(139,92,246,0.5) 0%, rgba(109,40,217,0.15) 50%, transparent 70%);
+          top: -140px; right: -100px;
+          filter: blur(55px);
+          animation: sl-orb2 11s ease-in-out infinite alternate;
+          pointer-events: none;
         }
 
+        /* Aurora orb 3 — pink/magenta center */
+        .sl-aurora-3 {
+          position: absolute;
+          width: 320px; height: 320px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(236,72,153,0.35) 0%, rgba(219,39,119,0.1) 50%, transparent 70%);
+          top: 40%; left: 30%;
+          filter: blur(50px);
+          animation: sl-orb3 13s ease-in-out infinite alternate;
+          pointer-events: none;
+        }
+
+        /* Aurora orb 4 — cyan accent */
+        .sl-aurora-4 {
+          position: absolute;
+          width: 260px; height: 260px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(6,182,212,0.4) 0%, rgba(6,182,212,0.1) 50%, transparent 70%);
+          top: 20%; left: -60px;
+          filter: blur(48px);
+          animation: sl-orb4 7s ease-in-out infinite alternate;
+          pointer-events: none;
+        }
+
+        @keyframes sl-orb1 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(40px, -60px) scale(1.15); }
+        }
+        @keyframes sl-orb2 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(-50px, 70px) scale(1.2); }
+        }
+        @keyframes sl-orb3 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(-40px, -50px) scale(1.1); }
+        }
+        @keyframes sl-orb4 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(30px, 60px) scale(1.25); }
+        }
+
+        /* Subtle noise overlay to add grain texture like the reference */
+        .sl-noise {
+          position: absolute;
+          inset: 0;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+          background-size: 180px 180px;
+          opacity: 0.35;
+          pointer-events: none;
+          mix-blend-mode: overlay;
+        }
+
+        /* Glass card wrapping the brand text */
+        .sl-glass-card {
+          position: relative;
+          z-index: 1;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 16px;
+          padding: 32px 32px 28px;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          box-shadow: 0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+          opacity: 0;
+          animation: sl-up 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+          animation-delay: 0.2s;
+        }
+
+        /* Thin top highlight line on glass card */
+        .sl-glass-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 16px; right: 16px;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+          border-radius: 1px;
+        }
+
+        /* Top-left status */
         .sl-status {
-          display: flex; align-items: center; gap: 8px;
-          position: relative; z-index: 2;
-          opacity: 0; animation: sl-fade 0.5s ease forwards 0.1s;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          z-index: 1;
+          opacity: 0;
+          animation: sl-fade 0.6s ease forwards;
+          animation-delay: 0.1s;
         }
 
         .sl-status-dot {
-          width: 7px; height: 7px; border-radius: 50%;
-          background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.9);
-          animation: sl-pulse 2.2s ease-in-out infinite;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 10px #10b981;
+          animation: sl-pulse 2s ease-in-out infinite;
         }
 
         @keyframes sl-pulse {
-          0%,100% { opacity:1; box-shadow: 0 0 8px rgba(16,185,129,0.9); }
-          50%      { opacity:.45; box-shadow: 0 0 3px rgba(16,185,129,0.4); }
+          0%, 100% { opacity: 1; box-shadow: 0 0 10px #10b981; }
+          50% { opacity: 0.5; box-shadow: 0 0 4px #10b981; }
         }
 
         .sl-status-txt {
-          font-family: 'Space Mono', monospace; font-size: 10px;
-          color: rgba(16,185,129,0.5); letter-spacing: 0.16em;
+          font-family: 'Space Mono', monospace;
+          font-size: 10px;
+          color: rgba(16,185,129,0.5);
+          letter-spacing: 0.15em;
         }
 
+        /* Center brand block */
         .sl-brand {
-          position: relative; z-index: 2;
-          opacity: 0; animation: sl-up 0.7s cubic-bezier(0.22,1,0.36,1) forwards 0.22s;
+          z-index: 1;
+          opacity: 1;
         }
 
         .sl-eyebrow {
-          font-family: 'Space Mono', monospace; font-size: 10px;
-          color: rgba(16,185,129,0.45); letter-spacing: 0.22em;
-          text-transform: uppercase; margin-bottom: 14px;
-          display: flex; align-items: center; gap: 10px;
+          font-family: 'Space Mono', monospace;
+          font-size: 10px;
+          color: rgba(180,255,220,0.6);
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          margin-bottom: 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
         }
 
         .sl-eyebrow::before {
-          content: ''; width: 26px; height: 1px;
-          background: rgba(16,185,129,0.4); display: block;
+          content: '';
+          display: block;
+          width: 28px;
+          height: 1px;
+          background: rgba(16,185,129,0.6);
         }
 
         .sl-title {
           font-family: 'Rajdhani', sans-serif;
-          font-size: clamp(54px, 5.5vw, 78px); font-weight: 700;
-          line-height: 0.88; letter-spacing: 0.02em;
-          text-transform: uppercase; color: #eaf4ee;
+          font-size: clamp(52px, 6vw, 80px);
+          font-weight: 700;
+          line-height: 0.9;
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
+          color: #ffffff;
+          text-shadow: 0 0 40px rgba(16,185,129,0.3);
         }
 
         .sl-title-accent {
-          display: block; color: #10b981;
-          font-size: clamp(60px, 6.5vw, 90px);
+          display: block;
+          color: #10b981;
+          font-size: clamp(56px, 7vw, 92px);
+          text-shadow: 0 0 60px rgba(16,185,129,0.6), 0 0 120px rgba(16,185,129,0.2);
         }
 
         .sl-tagline {
-          margin-top: 18px; font-size: 13px;
-          color: rgba(140,190,165,0.38); letter-spacing: 0.09em;
-          text-transform: uppercase; line-height: 1.55;
+          margin-top: 20px;
+          font-size: 14px;
+          color: rgba(200,240,220,0.45);
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          line-height: 1.5;
+          max-width: 260px;
         }
 
-        .sl-stats { display: flex; gap: 24px; margin-top: 30px; }
-        .sl-stat  { display: flex; flex-direction: column; gap: 3px; }
+        /* Stat row */
+        .sl-stats {
+          display: flex;
+          gap: 28px;
+          margin-top: 36px;
+          z-index: 1;
+        }
+
+        .sl-stat {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
 
         .sl-stat-val {
-          font-family: 'Space Mono', monospace; font-size: 18px;
-          font-weight: 700; color: #10b981; letter-spacing: -0.01em;
+          font-family: 'Space Mono', monospace;
+          font-size: 22px;
+          font-weight: 700;
+          color: #10b981;
+          letter-spacing: -0.02em;
+          text-shadow: 0 0 20px rgba(16,185,129,0.5);
         }
 
         .sl-stat-lbl {
-          font-size: 10px; color: rgba(16,185,129,0.28);
-          letter-spacing: 0.14em; text-transform: uppercase;
+          font-size: 10px;
+          color: rgba(180,255,220,0.3);
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
         }
 
         .sl-stat-div {
-          width: 1px; align-self: stretch;
-          background: rgba(16,185,129,0.14);
+          width: 1px;
+          background: rgba(255,255,255,0.1);
+          align-self: stretch;
         }
 
+        /* Bottom left meta */
         .sl-left-foot {
-          position: relative; z-index: 2;
-          opacity: 0; animation: sl-fade 0.5s ease forwards 0.6s;
+          z-index: 1;
+          opacity: 0;
+          animation: sl-fade 0.6s ease forwards;
+          animation-delay: 0.6s;
         }
 
         .sl-left-foot-txt {
-          font-family: 'Space Mono', monospace; font-size: 9px;
-          color: rgba(16,185,129,0.18); letter-spacing: 0.13em;
-          line-height: 1.9; text-transform: uppercase;
+          font-family: 'Space Mono', monospace;
+          font-size: 9px;
+          color: rgba(16,185,129,0.2);
+          letter-spacing: 0.12em;
+          line-height: 1.8;
         }
 
-        /* DIVIDER */
-        .sl-divider { position: relative; width: 0; flex-shrink: 0; }
+        /* Diagonal separator */
+        .sl-divider {
+          position: relative;
+          width: 0;
+          flex-shrink: 0;
+        }
 
         .sl-divider::before {
-          content: ''; position: absolute;
-          top: 0; bottom: 0; left: 0; width: 1px;
-          background: linear-gradient(to bottom,
-            transparent 0%, rgba(16,185,129,0.22) 25%,
-            rgba(16,185,129,0.22) 75%, transparent 100%);
+          content: '';
+          position: absolute;
+          top: 0; bottom: 0;
+          left: 0;
+          width: 1px;
+          background: linear-gradient(to bottom, transparent, rgba(16,185,129,0.25) 30%, rgba(16,185,129,0.25) 70%, transparent);
         }
 
+        /* Notch on divider */
         .sl-notch {
-          position: absolute; top: 50%; left: -5px;
-          width: 10px; height: 10px;
-          border: 1px solid rgba(16,185,129,0.35);
-          background: #060e0a;
+          position: absolute;
+          top: 50%;
+          left: -5px;
+          transform: translateY(-50%);
+          width: 10px;
+          height: 10px;
+          border: 1px solid rgba(16,185,129,0.4);
+          background: #07100d;
           transform: translateY(-50%) rotate(45deg);
         }
 
-        /* RIGHT PANEL */
+        /* ── RIGHT PANEL ── */
         .sl-right {
-          flex: 1; position: relative;
-          display: flex; flex-direction: column; justify-content: center;
-          padding: 56px 60px; background: #060809;
-          overflow: hidden; isolation: isolate;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 60px 56px;
+          position: relative;
+          background: #06080a;
         }
 
-        .sl-right-grid {
-          position: absolute; inset: 0;
-          background-image:
-            repeating-linear-gradient(0deg,  rgba(16,185,129,0.025) 0px, rgba(16,185,129,0.025) 1px, transparent 1px, transparent 44px),
-            repeating-linear-gradient(90deg, rgba(16,185,129,0.02)  0px, rgba(16,185,129,0.02)  1px, transparent 1px, transparent 44px);
-          pointer-events: none; z-index: 0;
+        .sl-right::before {
+          content: '';
+          position: absolute;
+          top: 0; right: 0;
+          width: 300px; height: 300px;
+          background: radial-gradient(circle, rgba(16,185,129,0.04) 0%, transparent 70%);
+          pointer-events: none;
         }
 
-        .sl-right-glow {
-          position: absolute; width: 360px; height: 360px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(16,185,129,0.07) 0%, transparent 65%);
-          top: -80px; right: -80px; pointer-events: none; z-index: 0;
-        }
-
-        /* Corner brackets on right */
-        .sl-rc {
-          position: absolute; width: 20px; height: 20px;
-          z-index: 2; pointer-events: none;
-        }
-
-        .sl-rc.tl { top: 20px; left: 24px;
-          border-top: 1.5px solid rgba(16,185,129,0.28);
-          border-left: 1.5px solid rgba(16,185,129,0.28); }
-        .sl-rc.tr { top: 20px; right: 24px;
-          border-top: 1.5px solid rgba(16,185,129,0.28);
-          border-right: 1.5px solid rgba(16,185,129,0.28); }
-        .sl-rc.bl { bottom: 20px; left: 24px;
-          border-bottom: 1.5px solid rgba(16,185,129,0.28);
-          border-left: 1.5px solid rgba(16,185,129,0.28); }
-        .sl-rc.br { bottom: 20px; right: 24px;
-          border-bottom: 1.5px solid rgba(16,185,129,0.28);
-          border-right: 1.5px solid rgba(16,185,129,0.28); }
-
+        /* Time top-right */
         .sl-time {
-          position: absolute; top: 28px; right: 40px;
-          font-family: 'Space Mono', monospace; font-size: 11px;
-          color: rgba(16,185,129,0.28); letter-spacing: 0.12em; z-index: 2;
+          position: absolute;
+          top: 28px;
+          right: 40px;
+          font-family: 'Space Mono', monospace;
+          font-size: 11px;
+          color: rgba(16,185,129,0.3);
+          letter-spacing: 0.12em;
         }
 
+        /* Form heading */
         .sl-form-head {
-          position: relative; z-index: 2; margin-bottom: 34px;
-          opacity: 0; animation: sl-up 0.6s ease forwards 0.3s;
+          margin-bottom: 36px;
+          opacity: 0;
+          animation: sl-up 0.6s ease forwards;
+          animation-delay: 0.3s;
         }
 
         .sl-form-title {
-          font-family: 'Rajdhani', sans-serif; font-size: 30px;
-          font-weight: 700; color: #eaf4ee;
-          letter-spacing: 0.07em; text-transform: uppercase;
+          font-family: 'Rajdhani', sans-serif;
+          font-size: 28px;
+          font-weight: 700;
+          color: #e8f4ee;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
         }
 
         .sl-form-sub {
-          font-size: 12px; color: rgba(120,160,140,0.45);
-          letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px;
+          font-size: 12px;
+          color: rgba(130,160,145,0.5);
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          margin-top: 4px;
         }
 
+        /* Fields */
         .sl-fields {
-          position: relative; z-index: 2;
-          display: flex; flex-direction: column; gap: 20px; margin-bottom: 26px;
+          display: flex;
+          flex-direction: column;
+          gap: 22px;
+          margin-bottom: 28px;
         }
 
         .sl-field {
-          display: flex; flex-direction: column; gap: 7px;
-          opacity: 0; animation: sl-up 0.5s ease forwards;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          opacity: 0;
+          animation: sl-up 0.5s ease forwards;
         }
 
         .sl-field:nth-child(1) { animation-delay: 0.4s; }
         .sl-field:nth-child(2) { animation-delay: 0.5s; }
 
         .sl-label {
-          font-family: 'Space Mono', monospace; font-size: 10px;
-          color: rgba(16,185,129,0.42); letter-spacing: 0.18em; text-transform: uppercase;
+          font-family: 'Space Mono', monospace;
+          font-size: 10px;
+          color: rgba(16,185,129,0.45);
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
         }
 
         .sl-input {
-          width: 100%; max-width: 380px;
+          width: 100%;
           padding: 13px 18px;
           background: rgba(16,185,129,0.03);
-          border: 1px solid rgba(16,185,129,0.13);
-          border-radius: 2px; color: #cce8d8;
+          border: 1px solid rgba(16,185,129,0.12);
+          border-radius: 2px;
+          color: #d4ede2;
           font-family: 'Barlow Condensed', sans-serif;
-          font-size: 16px; font-weight: 500; letter-spacing: 0.04em;
+          font-size: 16px;
+          font-weight: 500;
+          letter-spacing: 0.05em;
           outline: none;
           transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+          max-width: 380px;
         }
 
         .sl-input::placeholder {
-          color: rgba(16,185,129,0.17);
+          color: rgba(16,185,129,0.18);
           font-family: 'Space Mono', monospace;
-          font-size: 11px; letter-spacing: 0.07em;
+          font-size: 11px;
+          letter-spacing: 0.08em;
         }
 
         .sl-input:focus {
-          border-color: rgba(16,185,129,0.5);
+          border-color: rgba(16,185,129,0.45);
           background: rgba(16,185,129,0.06);
           box-shadow: 0 0 0 3px rgba(16,185,129,0.05);
         }
 
+        /* Error */
+        .sl-error {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          background: rgba(200,40,40,0.07);
+          border: 1px solid rgba(200,60,60,0.2);
+          border-radius: 2px;
+          margin-bottom: 20px;
+          max-width: 380px;
+        }
+
+        .sl-error-bar {
+          width: 3px;
+          height: 32px;
+          background: rgba(200,60,60,0.5);
+          border-radius: 2px;
+          flex-shrink: 0;
+        }
+
+        .sl-error-txt {
+          font-family: 'Space Mono', monospace;
+          font-size: 10px;
+          color: rgba(210,90,90,0.9);
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+        }
+
+        /* Button */
         .sl-btn-wrap {
-          position: relative; z-index: 2; max-width: 380px;
-          opacity: 0; animation: sl-up 0.5s ease forwards 0.58s;
+          opacity: 0;
+          animation: sl-up 0.5s ease forwards;
+          animation-delay: 0.6s;
+          max-width: 380px;
         }
 
         .sl-btn {
-          width: 100%; padding: 15px 24px; background: #10b981;
-          border: none; border-radius: 2px; color: #03150a;
-          font-family: 'Rajdhani', sans-serif; font-size: 17px;
-          font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
-          cursor: pointer; display: flex; align-items: center;
-          justify-content: center; gap: 10px;
-          position: relative; overflow: hidden;
+          width: 100%;
+          padding: 15px 24px;
+          background: #10b981;
+          border: none;
+          border-radius: 2px;
+          color: #041a0e;
+          font-family: 'Rajdhani', sans-serif;
+          font-size: 17px;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          cursor: pointer;
+          position: relative;
+          overflow: hidden;
           transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
         }
 
         .sl-btn::after {
-          content: ''; position: absolute; top: 0; left: -100%;
-          width: 50%; height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+          content: '';
+          position: absolute;
+          top: 0; left: -100%;
+          width: 50%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);
           transition: left 0.45s ease;
         }
 
         .sl-btn:hover::after { left: 160%; }
-        .sl-btn:hover { background: #0ecf8e; transform: translateY(-2px); box-shadow: 0 8px 30px rgba(16,185,129,0.32); }
+
+        .sl-btn:hover {
+          background: #0ecf8e;
+          transform: translateY(-2px);
+          box-shadow: 0 8px 32px rgba(16,185,129,0.3);
+        }
+
         .sl-btn:active { transform: translateY(0); box-shadow: none; }
         .sl-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 
         .sl-spinner {
           width: 14px; height: 14px;
-          border: 2px solid rgba(3,21,10,0.3); border-top-color: #03150a;
-          border-radius: 50%; animation: sl-spin 0.65s linear infinite; flex-shrink: 0;
+          border: 2px solid rgba(4,26,14,0.3);
+          border-top-color: #041a0e;
+          border-radius: 50%;
+          animation: sl-spin 0.7s linear infinite;
+          flex-shrink: 0;
         }
 
+        /* Footer */
         .sl-form-foot {
-          position: relative; z-index: 2; max-width: 380px;
-          margin-top: 28px; padding-top: 18px;
-          border-top: 1px solid rgba(16,185,129,0.08);
-          display: flex; align-items: center; justify-content: space-between;
-          opacity: 0; animation: sl-fade 0.5s ease forwards 0.72s;
+          margin-top: 32px;
+          padding-top: 20px;
+          border-top: 1px solid rgba(16,185,129,0.07);
+          max-width: 380px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          opacity: 0;
+          animation: sl-fade 0.6s ease forwards;
+          animation-delay: 0.75s;
         }
 
         .sl-form-foot-txt {
-          font-family: 'Space Mono', monospace; font-size: 9px;
-          color: rgba(16,185,129,0.2); letter-spacing: 0.12em; text-transform: uppercase;
+          font-family: 'Space Mono', monospace;
+          font-size: 9px;
+          color: rgba(16,185,129,0.2);
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
         }
 
-        .sl-lock { display: flex; align-items: center; gap: 5px; }
+        .sl-lock {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
 
-        .sl-lock-icon { width: 10px; height: 12px; position: relative; }
+        .sl-lock-icon {
+          width: 10px;
+          height: 11px;
+          position: relative;
+        }
 
         .sl-lock-body {
-          width: 10px; height: 7px; background: rgba(16,185,129,0.2);
-          border-radius: 1px; position: absolute; bottom: 0;
+          width: 10px;
+          height: 7px;
+          background: rgba(16,185,129,0.2);
+          border-radius: 1px;
+          position: absolute;
+          bottom: 0;
         }
 
         .sl-lock-shackle {
-          width: 6px; height: 6px;
+          width: 6px;
+          height: 5px;
           border: 1.5px solid rgba(16,185,129,0.2);
-          border-bottom: none; border-radius: 3px 3px 0 0;
-          position: absolute; top: 0; left: 2px;
+          border-bottom: none;
+          border-radius: 3px 3px 0 0;
+          position: absolute;
+          top: 0;
+          left: 2px;
         }
 
-        /* POPUP OVERLAY */
-        .sl-overlay {
-          position: fixed; inset: 0; z-index: 200;
-          display: flex; align-items: center; justify-content: center;
-          animation: sl-fade 0.2s ease forwards;
-        }
-
-        .sl-overlay-bg {
-          position: absolute; inset: 0;
-          background: rgba(4,6,8,0.85);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-        }
-
-        .sl-overlay-scan {
-          position: absolute; inset: 0;
-          background: repeating-linear-gradient(
-            0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px,
-            transparent 1px, transparent 3px
-          );
-          pointer-events: none;
-        }
-
-        /* Popup card */
-        .sl-popup {
-          position: relative; z-index: 1;
-          padding: 48px 60px 44px; text-align: center; min-width: 320px;
-          animation: sl-popup-in 0.4s cubic-bezier(0.22,1,0.36,1) forwards;
-        }
-
-        @keyframes sl-popup-in {
-          from { opacity: 0; transform: scale(0.82) translateY(20px); }
-          to   { opacity: 1; transform: scale(1)    translateY(0); }
-        }
-
-        /* Corner brackets — 4 corners via 2 pseudo-elements + 2 spans */
-        .sl-pc  { position: absolute; inset: 0; pointer-events: none; }
-        .sl-pc2 { position: absolute; inset: 0; pointer-events: none; }
-
-        .sl-pc::before, .sl-pc::after,
-        .sl-pc2 span:nth-child(1), .sl-pc2 span:nth-child(2) {
-          content: ''; position: absolute;
-          width: 24px; height: 24px; display: block;
-        }
-
-        .sl-popup.granted .sl-pc::before,
-        .sl-popup.granted .sl-pc::after,
-        .sl-popup.granted .sl-pc2 span { border-color: rgba(16,185,129,0.65); }
-
-        .sl-popup.denied .sl-pc::before,
-        .sl-popup.denied .sl-pc::after,
-        .sl-popup.denied .sl-pc2 span { border-color: rgba(220,55,55,0.65); }
-
-        .sl-pc::before { top:0; left:0; border-top:2px solid; border-left:2px solid; }
-        .sl-pc::after  { bottom:0; right:0; border-bottom:2px solid; border-right:2px solid; }
-        .sl-pc2 span:nth-child(1) { top:0; right:0; border-top:2px solid; border-right:2px solid; }
-        .sl-pc2 span:nth-child(2) { bottom:0; left:0; border-bottom:2px solid; border-left:2px solid; }
-
-        /* Ring icon */
-        .sl-pi {
-          width: 68px; height: 68px; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          margin: 0 auto 24px; position: relative;
-        }
-
-        .sl-popup.granted .sl-pi {
-          border: 2px solid rgba(16,185,129,0.65);
-          box-shadow: 0 0 32px rgba(16,185,129,0.18), inset 0 0 20px rgba(16,185,129,0.05);
-        }
-
-        .sl-popup.denied .sl-pi {
-          border: 2px solid rgba(220,55,55,0.65);
-          box-shadow: 0 0 32px rgba(220,55,55,0.18), inset 0 0 20px rgba(220,55,55,0.05);
-        }
-
-        .sl-pi::before {
-          content: ''; position: absolute; inset: 7px;
-          border-radius: 50%; border: 1px solid; opacity: 0.25;
-        }
-
-        .sl-popup.granted .sl-pi::before { border-color: #10b981; }
-        .sl-popup.denied  .sl-pi::before { border-color: #dc3737; }
-
-        /* Checkmark */
-        .sl-check { width: 28px; height: 28px; position: relative; }
-
-        .sl-check::before {
-          content: ''; position: absolute;
-          left: 1px; top: 12px; width: 9px; height: 2.5px;
-          background: #10b981; border-radius: 1px;
-          transform: rotate(45deg); transform-origin: left center;
-        }
-
-        .sl-check::after {
-          content: ''; position: absolute;
-          left: 7px; top: 15px; width: 16px; height: 2.5px;
-          background: #10b981; border-radius: 1px;
-          transform: rotate(-52deg); transform-origin: left center;
-        }
-
-        /* X mark */
-        .sl-xmark { width: 24px; height: 24px; position: relative; }
-
-        .sl-xmark::before, .sl-xmark::after {
-          content: ''; position: absolute;
-          width: 24px; height: 2.5px; background: #dc3737;
-          top: 50%; left: 0; border-radius: 1px;
-          transform-origin: center;
-        }
-
-        .sl-xmark::before { transform: translateY(-50%) rotate(45deg); }
-        .sl-xmark::after  { transform: translateY(-50%) rotate(-45deg); }
-
-        /* Popup title & sub */
-        .sl-popup-title {
-          font-family: 'Rajdhani', sans-serif;
-          font-size: 36px; font-weight: 700;
-          letter-spacing: 0.1em; text-transform: uppercase;
-          line-height: 1; margin-bottom: 8px;
-        }
-
-        .sl-popup.granted .sl-popup-title { color: #10b981; }
-        .sl-popup.denied  .sl-popup-title { color: #dc3737; }
-
-        .sl-popup-sub {
-          font-family: 'Space Mono', monospace; font-size: 10px;
-          letter-spacing: 0.16em; text-transform: uppercase;
-        }
-
-        .sl-popup.granted .sl-popup-sub { color: rgba(16,185,129,0.45); }
-        .sl-popup.denied  .sl-popup-sub { color: rgba(220,55,55,0.45); }
-
-        /* Progress bar */
-        .sl-popup-prog {
-          height: 2px; border-radius: 1px;
-          margin: 20px auto 0; width: 0;
-          animation: sl-prog 1.95s cubic-bezier(0.4,0,0.2,1) forwards;
-        }
-
-        .sl-popup.granted .sl-popup-prog {
-          background: #10b981;
-          box-shadow: 0 0 8px rgba(16,185,129,0.7);
-        }
-
-        .sl-popup.denied .sl-popup-prog {
-          background: #dc3737;
-          box-shadow: 0 0 8px rgba(220,55,55,0.6);
-          animation-duration: 3.1s;
-        }
-
-        @keyframes sl-prog {
-          from { width: 0; }
-          to   { width: 130px; }
-        }
-
-        /* KEYFRAMES */
+        /* Keyframes */
         @keyframes sl-up {
-          from { opacity: 0; transform: translateY(14px); }
+          from { opacity: 0; transform: translateY(16px); }
           to   { opacity: 1; transform: translateY(0); }
         }
 
@@ -532,62 +606,218 @@ export default function Login() {
           to   { opacity: 1; }
         }
 
-        @keyframes sl-spin { to { transform: rotate(360deg); } }
+        @keyframes sl-spin {
+          to { transform: rotate(360deg); }
+        }
 
-        /* RESPONSIVE */
+        /* ── POPUP OVERLAY ── */
+        .sl-popup-overlay {
+          position: fixed;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 100;
+          background: rgba(6,8,10,0.75);
+          backdrop-filter: blur(6px);
+          animation: sl-fade 0.25s ease forwards;
+        }
+
+        .sl-popup {
+          position: relative;
+          padding: 40px 52px;
+          text-align: center;
+          animation: sl-popup-in 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+        }
+
+        @keyframes sl-popup-in {
+          from { opacity: 0; transform: scale(0.88); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+
+        .sl-popup-corners::before,
+        .sl-popup-corners::after {
+          content: '';
+          position: absolute;
+          width: 18px; height: 18px;
+        }
+        .sl-popup-corners::before { top: 0; left: 0; border-top: 2px solid currentColor; border-left: 2px solid currentColor; }
+        .sl-popup-corners::after  { bottom: 0; right: 0; border-bottom: 2px solid currentColor; border-right: 2px solid currentColor; }
+
+        .sl-popup-inner-corners {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+        }
+        .sl-popup-inner-corners span:nth-child(1) { position: absolute; top: 0; right: 0; width: 18px; height: 18px; border-top: 2px solid currentColor; border-right: 2px solid currentColor; }
+        .sl-popup-inner-corners span:nth-child(2) { position: absolute; bottom: 0; left: 0; width: 18px; height: 18px; border-bottom: 2px solid currentColor; border-left: 2px solid currentColor; }
+
+        .sl-popup.granted { color: #10b981; }
+        .sl-popup.denied  { color: #e05555; }
+
+        .sl-popup-icon {
+          width: 56px; height: 56px;
+          border-radius: 50%;
+          border: 2px solid currentColor;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 20px;
+          position: relative;
+        }
+
+        .sl-popup-icon::before {
+          content: '';
+          position: absolute;
+          inset: 6px;
+          border-radius: 50%;
+          border: 1px solid currentColor;
+          opacity: 0.3;
+        }
+
+        .sl-popup-check {
+          width: 22px; height: 22px;
+          position: relative;
+        }
+
+        .sl-popup-check::before {
+          content: '';
+          position: absolute;
+          left: 2px; top: 9px;
+          width: 7px; height: 2px;
+          background: #10b981;
+          transform: rotate(45deg);
+          transform-origin: left center;
+        }
+
+        .sl-popup-check::after {
+          content: '';
+          position: absolute;
+          left: 6px; top: 12px;
+          width: 13px; height: 2px;
+          background: #10b981;
+          transform: rotate(-55deg);
+          transform-origin: left center;
+        }
+
+        .sl-popup-x {
+          width: 20px; height: 20px;
+          position: relative;
+        }
+
+        .sl-popup-x::before,
+        .sl-popup-x::after {
+          content: '';
+          position: absolute;
+          width: 20px; height: 2px;
+          background: #e05555;
+          top: 9px; left: 0;
+          border-radius: 1px;
+        }
+        .sl-popup-x::before { transform: rotate(45deg); }
+        .sl-popup-x::after  { transform: rotate(-45deg); }
+
+        .sl-popup-title {
+          font-family: 'Rajdhani', sans-serif;
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          line-height: 1;
+          margin-bottom: 8px;
+        }
+
+        .sl-popup-sub {
+          font-family: 'Space Mono', monospace;
+          font-size: 10px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          opacity: 0.55;
+        }
+
+        .sl-popup-bar {
+          width: 0;
+          height: 2px;
+          background: currentColor;
+          margin: 16px auto 0;
+          border-radius: 1px;
+          animation: sl-bar-fill 1.8s ease forwards;
+        }
+
+        .sl-popup-bar.denied {
+          animation: sl-bar-fill 3s ease forwards;
+        }
+
+        @keyframes sl-bar-fill {
+          from { width: 0; opacity: 1; }
+          to   { width: 100px; opacity: 1; }
+        }
+
+        /* ── RESPONSIVE ── */
         @media (max-width: 768px) {
           .sl-root { flex-direction: column; }
-          .sl-left { width: 100%; padding: 28px 24px 24px; }
+          .sl-left {
+            width: 100%;
+            padding: 32px 28px 28px;
+            min-height: auto;
+          }
           .sl-title { font-size: 48px; }
           .sl-title-accent { font-size: 54px; }
           .sl-stats { display: none; }
           .sl-divider { display: none; }
-          .sl-right { padding: 40px 24px 48px; }
-          .sl-input, .sl-btn-wrap, .sl-form-foot { max-width: 100%; }
-          .sl-rc { display: none; }
-          .sl-popup { padding: 36px 32px 32px; min-width: 260px; }
+          .sl-right { padding: 36px 28px 48px; }
+          .sl-input, .sl-btn-wrap, .sl-form-foot, .sl-error { max-width: 100%; }
         }
       `}</style>
 
       <div className="sl-root">
 
-        {/* LEFT: BRAND */}
+        {/* ── LEFT: BRAND ── */}
         <div className="sl-left">
-          <div className="sl-left-grid" />
-          <div className="sl-left-glow" />
 
+          {/* Aurora orbs */}
+          <div className="sl-aurora-1" />
+          <div className="sl-aurora-2" />
+          <div className="sl-aurora-3" />
+          <div className="sl-aurora-4" />
+          {/* Grain noise overlay */}
+          <div className="sl-noise" />
+
+          {/* Top status */}
           <div className="sl-status">
             <div className="sl-status-dot" />
             <span className="sl-status-txt">SYSTEM ONLINE</span>
           </div>
 
-          <div className="sl-brand">
-            <div className="sl-eyebrow">Tournament Control</div>
-            <h1 className="sl-title">
-              Admin
-              <span className="sl-title-accent">OPS</span>
-            </h1>
-            <p className="sl-tagline">
-              Real-time match control &<br />tournament management
-            </p>
-            <div className="sl-stats">
-              <div className="sl-stat">
-                <span className="sl-stat-val">LIVE</span>
-                <span className="sl-stat-lbl">Status</span>
-              </div>
-              <div className="sl-stat-div" />
-              <div className="sl-stat">
-                <span className="sl-stat-val">v2.0</span>
-                <span className="sl-stat-lbl">Version</span>
-              </div>
-              <div className="sl-stat-div" />
-              <div className="sl-stat">
-                <span className="sl-stat-val">IST</span>
-                <span className="sl-stat-lbl">Timezone</span>
+          {/* Center brand — wrapped in glass card */}
+          <div className="sl-glass-card">
+            <div className="sl-brand">
+              <div className="sl-eyebrow">Tournament Control</div>
+              <h1 className="sl-title">
+                Admin
+                <span className="sl-title-accent">OPS</span>
+              </h1>
+              <p className="sl-tagline">
+                Real-time match control &<br />tournament management
+              </p>
+              <div className="sl-stats">
+                <div className="sl-stat">
+                  <span className="sl-stat-val">LIVE</span>
+                  <span className="sl-stat-lbl">Status</span>
+                </div>
+                <div className="sl-stat-div" />
+                <div className="sl-stat">
+                  <span className="sl-stat-val">v2.0</span>
+                  <span className="sl-stat-lbl">Version</span>
+                </div>
+                <div className="sl-stat-div" />
+                <div className="sl-stat">
+                  <span className="sl-stat-val">IST</span>
+                  <span className="sl-stat-lbl">Timezone</span>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Bottom meta */}
           <div className="sl-left-foot">
             <div className="sl-left-foot-txt">
               AUTHORIZED PERSONNEL ONLY<br />
@@ -596,22 +826,15 @@ export default function Login() {
           </div>
         </div>
 
-        {/* DIVIDER */}
+        {/* Divider */}
         <div className="sl-divider">
           <div className="sl-notch" />
         </div>
 
-        {/* RIGHT: FORM */}
+        {/* ── RIGHT: FORM ── */}
         <div className="sl-right">
-          <div className="sl-right-grid" />
-          <div className="sl-right-glow" />
 
-          {/* Corner brackets */}
-          <div className="sl-rc tl" />
-          <div className="sl-rc tr" />
-          <div className="sl-rc bl" />
-          <div className="sl-rc br" />
-
+          {/* Live clock */}
           <div className="sl-time">{mounted ? time : '--:--:--'}</div>
 
           <div className="sl-form-head">
@@ -624,22 +847,35 @@ export default function Login() {
               <div className="sl-field">
                 <label className="sl-label">Email Address</label>
                 <input
-                  type="email" className="sl-input"
+                  type="email"
+                  className="sl-input"
                   placeholder="admin@domain.com"
-                  value={email} onChange={e => setEmail(e.target.value)}
-                  required autoComplete="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
                 />
               </div>
               <div className="sl-field">
                 <label className="sl-label">Password</label>
                 <input
-                  type="password" className="sl-input"
+                  type="password"
+                  className="sl-input"
                   placeholder="••••••••••"
-                  value={password} onChange={e => setPassword(e.target.value)}
-                  required autoComplete="current-password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
+
+            {error && (
+              <div className="sl-error">
+                <div className="sl-error-bar" />
+                <span className="sl-error-txt">{error}</span>
+              </div>
+            )}
 
             <div className="sl-btn-wrap">
               <button type="submit" className="sl-btn" disabled={loading}>
@@ -659,23 +895,22 @@ export default function Login() {
               <span className="sl-form-foot-txt">SSL</span>
             </div>
           </div>
+
         </div>
       </div>
 
-      {/* POPUP */}
+      {/* ── ACCESS POPUP ── */}
       {popup && (
-        <div className="sl-overlay">
-          <div className="sl-overlay-bg" />
-          <div className="sl-overlay-scan" />
+        <div className="sl-popup-overlay">
+          <div className={`sl-popup sl-popup-corners ${popup}`}>
+            <div className="sl-popup-inner-corners">
+              <span /><span />
+            </div>
 
-          <div className={`sl-popup ${popup}`}>
-            <div className="sl-pc" />
-            <div className="sl-pc2"><span /><span /></div>
-
-            <div className="sl-pi">
+            <div className="sl-popup-icon">
               {popup === 'granted'
-                ? <div className="sl-check" />
-                : <div className="sl-xmark" />
+                ? <div className="sl-popup-check" />
+                : <div className="sl-popup-x" />
               }
             </div>
 
@@ -684,11 +919,11 @@ export default function Login() {
             </div>
             <div className="sl-popup-sub">
               {popup === 'granted'
-                ? 'Identity confirmed · Redirecting...'
-                : 'Authentication failed · Try again'
+                ? 'Redirecting to dashboard...'
+                : 'Invalid credentials. Try again.'
               }
             </div>
-            <div className="sl-popup-prog" />
+            <div className={`sl-popup-bar ${popup}`} />
           </div>
         </div>
       )}
