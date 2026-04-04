@@ -376,7 +376,7 @@ function MainOverlayContent() {
                     <span className="text-yellow-400 font-black text-sm">#{index + 1}</span>
                     <span className="text-white font-bold text-sm">{team.name}</span>
                   </div>
-                  <span className="text-yellow-400 text-xs font-bold">{team.total_kills}K</span>
+                  <span className="text-yellow-400 text-xs font-bold">{team.total_kills} Kill(s) </span>
                 </div>
                 <div className="flex gap-1">
                   {team.players?.map(p => (
