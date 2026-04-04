@@ -291,8 +291,7 @@ function MainOverlayContent() {
               <thead className="sticky top-0 bg-gray-800">
                 <tr>
                   <th className="text-left px-2 py-1.5 text-[10px] text-gray-400 uppercase">#</th>
-                  <th className="text-left px-2 py-1.5 text-[10px] text-gray-400 uppercase">Team</th>
-                  <th className="px-2 py-1.5 text-[10px] text-gray-400 uppercase">Alive</th>
+                  <th className="text-left px-2 py-1.5 text-[10px] text-gray-400 uppercase">Team</th> 
                   <th className="px-2 py-1.5 text-[10px] text-gray-400 uppercase">K</th>
                   <th className="px-2 py-1.5 text-[10px] text-yellow-400 uppercase font-bold">PTS</th>
                 </tr>
@@ -320,11 +319,6 @@ function MainOverlayContent() {
                           />
                         ))}
                       </div>
-                    </td>
-                    <td className="px-2 py-1.5 text-center">
-                      <span className="text-green-400 text-xs font-bold">
-                        {team.players?.filter(p => p.alive).length}
-                      </span>
                     </td>
                     <td className="px-2 py-1.5 text-center">
                       <span className="text-blue-400 text-xs font-bold">

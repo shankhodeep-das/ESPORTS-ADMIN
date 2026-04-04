@@ -276,11 +276,6 @@ export default function ManageMatch() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link href={`/match/${id}/leaderboard`}>
-            <button className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-widest transition-all border border-yellow-500/30">
-              🏆 Leaderboard
-            </button>
-          </Link>
           <button
             onClick={addTeam}
             disabled={addingTeam}
