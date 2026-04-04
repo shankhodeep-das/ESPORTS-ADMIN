@@ -327,7 +327,7 @@ function MainOverlayContent() {
                   <th className="text-left px-2 py-1.5 text-[10px] uppercase"
                     style={{ color: lb.textSecondary || '#6b7280' }}>Team</th>
                   <th className="px-2 py-1.5 text-[10px] uppercase"
-                    style={{ color: lb.textSecondary || '#6b7280' }}>K</th>
+                    style={{ color: lb.textSecondary || '#6b7280' }}> Kill(s)</th>
                   <th className="px-2 py-1.5 text-[10px] uppercase font-bold"
                     style={{ color: lb.pointsColor || '#fbbf24' }}>PTS</th>
                 </tr>
@@ -484,7 +484,7 @@ function MainOverlayContent() {
                     className="text-xs font-bold"
                     style={{ color: f4.highlightColor || '#fbbf24' }}
                   >
-                    {team.total_kills}K
+                    {team.total_kills} Kill(s)
                   </span>
                 </div>
                 <div className="flex gap-1">
