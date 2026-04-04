@@ -95,6 +95,11 @@ export default function Dashboard() {
               ➕ New Match
             </button>
           </Link>
+          <Link href="/themes">
+            <button className="bg-white/5 hover:bg-white/10 text-white font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-widest transition-all border border-white/10">
+              🎨 Themes
+            </button>
+          </Link>
           <button
             onClick={handleLogout}
             className="text-xs text-red-400 hover:text-red-300 font-bold uppercase tracking-widest"

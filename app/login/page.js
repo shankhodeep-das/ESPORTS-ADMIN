@@ -872,7 +872,7 @@ export default function Login() {
                   <label className="sl-label">Email Address</label>
                   <input
                     type="email" className="sl-input"
-                    placeholder="admin@domain.com"
+                    placeholder="xyz123@gmail.com"
                     value={email} onChange={e => setEmail(e.target.value)}
                     required autoComplete="email"
                   />
