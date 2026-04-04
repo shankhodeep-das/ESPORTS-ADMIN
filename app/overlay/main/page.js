@@ -17,6 +17,7 @@ function MainOverlayContent() {
   const [matchPoints, setMatchPoints] = useState([])
   const [overallPoints, setOverallPoints] = useState([])
   const [currentMatch, setCurrentMatch] = useState(null)
+  const [theme, setTheme] = useState(null)
   const booyahDeclared = useRef(false)
 
   const [leaderboardPos, setLeaderboardPos] = useState({ x: 20, y: 20 })
@@ -31,39 +32,18 @@ function MainOverlayContent() {
     fetchAll()
 
     const channel = supabase
-      .channel('main-overlay-v2')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'teams'
-      }, () => fetchAll())
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'players'
-      }, () => fetchAll())
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'matches'
-      }, (payload) => {
-        if (payload.new.status === 'finished') {
-          checkWinner(payload.new.id)
-        } else if (payload.new.status === 'live') {
-          booyahDeclared.current = false
-          fetchAll()
-        }
+      .channel('main-overlay-v3')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'themes' }, () => {
+        if (matchId) fetchTheme(matchId)
       })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'overlay_settings'
-      }, () => fetchSettings())
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'match_points'
-      }, () => fetchAll())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
+        if (payload.new.status === 'finished') checkWinner(payload.new.id)
+        else if (payload.new.status === 'live') { booyahDeclared.current = false; fetchAll() }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_points' }, () => fetchAll())
       .subscribe()
 
     return () => supabase.removeChannel(channel)
@@ -92,6 +72,15 @@ function MainOverlayContent() {
     }
   }
 
+  async function fetchTheme(mId) {
+    const { data } = await supabase
+      .from('themes')
+      .select('*')
+      .eq('match_id', mId)
+      .single()
+    if (data) setTheme(data)
+  }
+
   async function fetchTeams() {
     let liveMatchId = matchId
 
@@ -114,6 +103,9 @@ function MainOverlayContent() {
       setCurrentMatch(m)
     }
 
+    // Fetch theme for this match
+    fetchTheme(liveMatchId)
+
     const { data } = await supabase
       .from('teams')
       .select('*, players(*)')
@@ -133,7 +125,6 @@ function MainOverlayContent() {
 
   async function fetchPoints() {
     if (!matchId) return
-
     const { data: mp } = await supabase
       .from('match_points')
       .select('*')
@@ -155,9 +146,7 @@ function MainOverlayContent() {
       if (op) {
         const teamMap = {}
         op.forEach(p => {
-          if (!teamMap[p.team_name]) {
-            teamMap[p.team_name] = { team_name: p.team_name, total: 0 }
-          }
+          if (!teamMap[p.team_name]) teamMap[p.team_name] = { team_name: p.team_name, total: 0 }
           teamMap[p.team_name].total += p.total_points
         })
         setOverallPoints(Object.values(teamMap).sort((a, b) => b.total - a.total))
@@ -199,6 +188,11 @@ function MainOverlayContent() {
   const showLeaderboard = settings?.show_leaderboard !== false
   const showFinal4 = settings?.show_final4 !== false
 
+  // Theme shortcuts with fallbacks
+  const lb = theme?.leaderboard_theme || {}
+  const f4 = theme?.final4_theme || {}
+  const by = theme?.booyah_theme || {}
+
   function startDrag(e, type) {
     dragging.current = type
     dragOffset.current = {
@@ -210,15 +204,9 @@ function MainOverlayContent() {
 
   function onMouseMove(e) {
     if (dragging.current === 'leaderboard') {
-      setLeaderboardPos({
-        x: e.clientX - dragOffset.current.x,
-        y: e.clientY - dragOffset.current.y
-      })
+      setLeaderboardPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
     } else if (dragging.current === 'final4') {
-      setFinal4Pos({
-        x: e.clientX - dragOffset.current.x,
-        y: e.clientY - dragOffset.current.y
-      })
+      setFinal4Pos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
     } else if (resizing.current) {
       setLeaderboardSize({
         width: Math.max(300, e.clientX - leaderboardPos.x),
@@ -232,20 +220,46 @@ function MainOverlayContent() {
     resizing.current = false
   }
 
+  function glowSize(intensity) {
+    if (intensity === 'low') return '10px'
+    if (intensity === 'medium') return '20px'
+    if (intensity === 'high') return '40px'
+    return '0px'
+  }
+
+  // BOOYAH STATE
   if (overlayState === 'booyah') {
     return (
-      <main className="min-h-screen bg-black/90 flex items-center justify-center">
+      <main
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: by.bg || '#000000' }}
+      >
         <div className="text-center">
-          <p className="text-yellow-400 font-bold text-xl tracking-widest uppercase mb-4">
+          <p
+            className="font-bold text-xl tracking-widest uppercase mb-4"
+            style={{ color: by.killsColor || '#9ca3af' }}
+          >
             Winner Winner
           </p>
-          <h1 className="text-8xl font-black text-green-400 mb-6 drop-shadow-[0_0_30px_rgba(16,185,129,0.8)]">
+          <h1
+            className="text-8xl font-black mb-6"
+            style={{
+              color: by.booyahColor || '#10b981',
+              textShadow: `0 0 ${glowSize(by.glowIntensity)} ${by.glowColor || '#10b981'}`
+            }}
+          >
             BOOYAH!
           </h1>
-          <h2 className="text-5xl font-black text-white mb-4">
+          <h2
+            className="text-5xl font-black mb-4"
+            style={{ color: by.winnerColor || '#ffffff' }}
+          >
             {winner?.name}
           </h2>
-          <p className="text-2xl text-gray-400">
+          <p
+            className="text-2xl"
+            style={{ color: by.killsColor || '#9ca3af' }}
+          >
             🎯 {winner?.total_kills} Kills
           </p>
         </div>
@@ -271,62 +285,111 @@ function MainOverlayContent() {
             height: leaderboardSize.height,
           }}
         >
+          {/* Header */}
           <div
-            className="bg-gray-900/95 border border-gray-700 rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing flex justify-between items-center"
+            className="rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing flex justify-between items-center"
+            style={{
+              backgroundColor: lb.headerBg || '#064e3b',
+              border: `1px solid ${lb.borderColor || '#10b981'}`,
+              boxShadow: lb.borderGlow ? `0 0 20px ${lb.borderColor || '#10b981'}40` : 'none'
+            }}
             onMouseDown={(e) => startDrag(e, 'leaderboard')}
           >
-            <span className="text-white text-xs font-black uppercase tracking-widest">
+            <span
+              className="font-black text-xs uppercase tracking-widest"
+              style={{ color: lb.textPrimary || '#ffffff' }}
+            >
               🏆 Leaderboard
             </span>
-            <span className="text-[10px] text-gray-400 uppercase">
+            <span
+              className="text-[10px] uppercase"
+              style={{ color: lb.textSecondary || '#6b7280' }}
+            >
               {mode === 'match' ? 'Match Points' : 'Overall Points'}
             </span>
           </div>
 
+          {/* Table */}
           <div
-            className="bg-gray-900/90 border-x border-gray-700 overflow-y-auto"
-            style={{ height: leaderboardSize.height - 70 }}
+            className="border-x overflow-y-auto"
+            style={{
+              height: leaderboardSize.height - 70,
+              backgroundColor: lb.panelBg || '#0a0a0c',
+              borderColor: lb.borderColor || '#10b981',
+              opacity: (lb.opacity || 95) / 100
+            }}
           >
             <table className="w-full">
-              <thead className="sticky top-0 bg-gray-800">
-                <tr>
-                  <th className="text-left px-2 py-1.5 text-[10px] text-gray-400 uppercase">#</th>
-                  <th className="text-left px-2 py-1.5 text-[10px] text-gray-400 uppercase">Team</th> 
-                  <th className="px-2 py-1.5 text-[10px] text-gray-400 uppercase">K</th>
-                  <th className="px-2 py-1.5 text-[10px] text-yellow-400 uppercase font-bold">PTS</th>
+              <thead className="sticky top-0">
+                <tr style={{ backgroundColor: lb.headerBg || '#064e3b' }}>
+                  <th className="text-left px-2 py-1.5 text-[10px] uppercase"
+                    style={{ color: lb.textSecondary || '#6b7280' }}>#</th>
+                  <th className="text-left px-2 py-1.5 text-[10px] uppercase"
+                    style={{ color: lb.textSecondary || '#6b7280' }}>Team</th>
+                  <th className="px-2 py-1.5 text-[10px] uppercase"
+                    style={{ color: lb.textSecondary || '#6b7280' }}>K</th>
+                  <th className="px-2 py-1.5 text-[10px] uppercase font-bold"
+                    style={{ color: lb.pointsColor || '#fbbf24' }}>PTS</th>
                 </tr>
               </thead>
               <tbody>
                 {teamsWithPoints.map((team, index) => (
                   <tr
                     key={team.id}
-                    className={`border-b border-gray-800 ${
-                      index === 0 ? 'bg-yellow-500/10' :
-                      index === 1 ? 'bg-gray-400/5' :
-                      index === 2 ? 'bg-orange-500/5' : ''
-                    }`}
+                    className="border-b"
+                    style={{ borderColor: (lb.borderColor || '#10b981') + '20' }}
                   >
-                    <td className="px-2 py-1.5 text-xs font-black text-yellow-400">
+                    <td className="px-2 py-1.5 font-black"
+                      style={{
+                        color: lb.rankColor || '#fbbf24',
+                        fontSize: `${lb.fontSize || 12}px`
+                      }}>
                       {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                     </td>
                     <td className="px-2 py-1.5">
-                      <span className="text-white text-xs font-bold">{team.name}</span>
+                      <span
+                        className="font-bold"
+                        style={{
+                          color: lb.textPrimary || '#ffffff',
+                          fontSize: `${lb.fontSize || 12}px`
+                        }}
+                      >
+                        {team.name}
+                      </span>
                       <div className="flex gap-0.5 mt-1">
                         {team.players?.map(p => (
                           <div
                             key={p.id}
-                            className={`h-1.5 flex-1 rounded-sm ${p.alive ? 'bg-green-500' : 'bg-gray-600'}`}
+                            className="flex-1 rounded-sm"
+                            style={{
+                              height: `${lb.barHeight || 6}px`,
+                              backgroundColor: p.alive
+                                ? lb.barAlive || '#10b981'
+                                : lb.barDead || '#374151'
+                            }}
                           />
                         ))}
                       </div>
                     </td>
                     <td className="px-2 py-1.5 text-center">
-                      <span className="text-blue-400 text-xs font-bold">
+                      <span
+                        className="font-bold"
+                        style={{
+                          color: lb.killsColor || '#60a5fa',
+                          fontSize: `${lb.fontSize || 12}px`
+                        }}
+                      >
                         {team.total_kills}
                       </span>
                     </td>
                     <td className="px-2 py-1.5 text-center">
-                      <span className="text-yellow-400 text-sm font-black">
+                      <span
+                        className="font-black"
+                        style={{
+                          color: lb.pointsColor || '#fbbf24',
+                          fontSize: `${lb.fontSize || 12}px`
+                        }}
+                      >
                         {mode === 'overall' ? team.overallTotal : team.matchTotal}
                       </span>
                     </td>
@@ -336,11 +399,19 @@ function MainOverlayContent() {
             </table>
           </div>
 
+          {/* Resize Handle */}
           <div
-            className="bg-gray-900/95 border border-gray-700 rounded-b-xl h-5 cursor-se-resize flex items-center justify-center"
+            className="rounded-b-xl h-5 cursor-se-resize flex items-center justify-center border"
+            style={{
+              backgroundColor: lb.headerBg || '#064e3b',
+              borderColor: lb.borderColor || '#10b981'
+            }}
             onMouseDown={(e) => { resizing.current = true; e.preventDefault() }}
           >
-            <div className="w-4 h-0.5 bg-gray-600 rounded"/>
+            <div
+              className="w-4 h-0.5 rounded"
+              style={{ backgroundColor: lb.borderColor || '#10b981' }}
+            />
           </div>
         </div>
       )}
@@ -349,40 +420,83 @@ function MainOverlayContent() {
       {showFinal4 && overlayState === 'final4' && (
         <div
           className="absolute select-none"
-          style={{
-            left: final4Pos.x,
-            top: final4Pos.y,
-          }}
+          style={{ left: final4Pos.x, top: final4Pos.y }}
         >
           <div
-            className="bg-yellow-900/80 border border-yellow-500/50 rounded-t-xl px-4 py-2 cursor-grab active:cursor-grabbing flex items-center gap-2"
+            className="rounded-t-xl px-4 py-2 cursor-grab active:cursor-grabbing flex items-center gap-2"
+            style={{
+              backgroundColor: f4.cardBg || '#1a1a00',
+              border: `1px solid ${f4.borderColor || '#fbbf24'}`,
+              boxShadow: f4.glowIntensity && f4.glowIntensity !== 'none'
+                ? `0 0 ${glowSize(f4.glowIntensity)} ${f4.borderColor || '#fbbf24'}50`
+                : 'none'
+            }}
             onMouseDown={(e) => startDrag(e, 'final4')}
           >
-            <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"/>
-            <span className="text-yellow-400 text-sm font-black uppercase tracking-widest">
+            <span
+              className="w-2 h-2 rounded-full animate-pulse"
+              style={{ backgroundColor: f4.highlightColor || '#fbbf24' }}
+            />
+            <span
+              className="text-sm font-black uppercase tracking-widest"
+              style={{ color: f4.highlightColor || '#fbbf24' }}
+            >
               ⚡ Final {aliveTeams.length} Teams
             </span>
-            <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"/>
+            <span
+              className="w-2 h-2 rounded-full animate-pulse"
+              style={{ backgroundColor: f4.highlightColor || '#fbbf24' }}
+            />
           </div>
 
-          <div className="bg-black/70 border-x border-b border-yellow-500/30 rounded-b-xl p-3 flex flex-col gap-2 min-w-64">
+          <div
+            className="border-x border-b rounded-b-xl p-3 flex flex-col gap-2 min-w-64"
+            style={{
+              backgroundColor: f4.bg || '#000000',
+              borderColor: (f4.borderColor || '#fbbf24') + '50'
+            }}
+          >
             {aliveTeams.map((team, index) => (
               <div
                 key={team.id}
-                className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2"
+                className="rounded-lg px-3 py-2"
+                style={{
+                  backgroundColor: f4.cardBg || '#1a1a00',
+                  border: `1px solid ${(f4.borderColor || '#fbbf24')}40`
+                }}
               >
                 <div className="flex justify-between items-center mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-yellow-400 font-black text-sm">#{index + 1}</span>
-                    <span className="text-white font-bold text-sm">{team.name}</span>
+                    <span
+                      className="font-black text-sm"
+                      style={{ color: f4.highlightColor || '#fbbf24' }}
+                    >
+                      #{index + 1}
+                    </span>
+                    <span
+                      className="font-bold text-sm"
+                      style={{ color: f4.textColor || '#ffffff' }}
+                    >
+                      {team.name}
+                    </span>
                   </div>
-                  <span className="text-yellow-400 text-xs font-bold">{team.total_kills} Kill(s) </span>
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: f4.highlightColor || '#fbbf24' }}
+                  >
+                    {team.total_kills}K
+                  </span>
                 </div>
                 <div className="flex gap-1">
                   {team.players?.map(p => (
                     <div
                       key={p.id}
-                      className={`h-2 flex-1 rounded-sm ${p.alive ? 'bg-yellow-400' : 'bg-gray-600'}`}
+                      className="flex-1 rounded-sm h-2"
+                      style={{
+                        backgroundColor: p.alive
+                          ? f4.barColor || '#fbbf24'
+                          : '#374151'
+                      }}
                     />
                   ))}
                 </div>
