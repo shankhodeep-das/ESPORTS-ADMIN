@@ -68,30 +68,109 @@ export default function Login() {
           justify-content: space-between;
           padding: 40px 44px;
           overflow: hidden;
-          background: #07100d;
+          background: #050a08;
         }
 
-        /* Vertical scanline grid */
-        .sl-left::before {
-          content: '';
+        /* Aurora orb 1 — teal/green bottom-left */
+        .sl-aurora-1 {
+          position: absolute;
+          width: 480px; height: 480px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(16,185,129,0.55) 0%, rgba(16,185,129,0.15) 45%, transparent 70%);
+          bottom: -160px; left: -120px;
+          filter: blur(60px);
+          animation: sl-orb1 9s ease-in-out infinite alternate;
+          pointer-events: none;
+        }
+
+        /* Aurora orb 2 — purple top-right */
+        .sl-aurora-2 {
+          position: absolute;
+          width: 400px; height: 400px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(139,92,246,0.5) 0%, rgba(109,40,217,0.15) 50%, transparent 70%);
+          top: -140px; right: -100px;
+          filter: blur(55px);
+          animation: sl-orb2 11s ease-in-out infinite alternate;
+          pointer-events: none;
+        }
+
+        /* Aurora orb 3 — pink/magenta center */
+        .sl-aurora-3 {
+          position: absolute;
+          width: 320px; height: 320px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(236,72,153,0.35) 0%, rgba(219,39,119,0.1) 50%, transparent 70%);
+          top: 40%; left: 30%;
+          filter: blur(50px);
+          animation: sl-orb3 13s ease-in-out infinite alternate;
+          pointer-events: none;
+        }
+
+        /* Aurora orb 4 — cyan accent */
+        .sl-aurora-4 {
+          position: absolute;
+          width: 260px; height: 260px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(6,182,212,0.4) 0%, rgba(6,182,212,0.1) 50%, transparent 70%);
+          top: 20%; left: -60px;
+          filter: blur(48px);
+          animation: sl-orb4 7s ease-in-out infinite alternate;
+          pointer-events: none;
+        }
+
+        @keyframes sl-orb1 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(40px, -60px) scale(1.15); }
+        }
+        @keyframes sl-orb2 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(-50px, 70px) scale(1.2); }
+        }
+        @keyframes sl-orb3 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(-40px, -50px) scale(1.1); }
+        }
+        @keyframes sl-orb4 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(30px, 60px) scale(1.25); }
+        }
+
+        /* Subtle noise overlay to add grain texture like the reference */
+        .sl-noise {
           position: absolute;
           inset: 0;
-          background-image:
-            repeating-linear-gradient(0deg, rgba(16,185,129,0.06) 0px, rgba(16,185,129,0.06) 1px, transparent 1px, transparent 40px),
-            repeating-linear-gradient(90deg, rgba(16,185,129,0.04) 0px, rgba(16,185,129,0.04) 1px, transparent 1px, transparent 40px);
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+          background-size: 180px 180px;
+          opacity: 0.35;
           pointer-events: none;
+          mix-blend-mode: overlay;
         }
 
-        /* Radial glow from bottom-left */
-        .sl-left::after {
+        /* Glass card wrapping the brand text */
+        .sl-glass-card {
+          position: relative;
+          z-index: 1;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 16px;
+          padding: 32px 32px 28px;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          box-shadow: 0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+          opacity: 0;
+          animation: sl-up 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+          animation-delay: 0.2s;
+        }
+
+        /* Thin top highlight line on glass card */
+        .sl-glass-card::before {
           content: '';
           position: absolute;
-          bottom: -120px;
-          left: -80px;
-          width: 500px;
-          height: 500px;
-          background: radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 65%);
-          pointer-events: none;
+          top: 0; left: 16px; right: 16px;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+          border-radius: 1px;
         }
 
         /* Top-left status */
@@ -129,15 +208,13 @@ export default function Login() {
         /* Center brand block */
         .sl-brand {
           z-index: 1;
-          opacity: 0;
-          animation: sl-up 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
-          animation-delay: 0.2s;
+          opacity: 1;
         }
 
         .sl-eyebrow {
           font-family: 'Space Mono', monospace;
           font-size: 10px;
-          color: rgba(16,185,129,0.45);
+          color: rgba(180,255,220,0.6);
           letter-spacing: 0.22em;
           text-transform: uppercase;
           margin-bottom: 16px;
@@ -151,7 +228,7 @@ export default function Login() {
           display: block;
           width: 28px;
           height: 1px;
-          background: rgba(16,185,129,0.4);
+          background: rgba(16,185,129,0.6);
         }
 
         .sl-title {
@@ -161,19 +238,21 @@ export default function Login() {
           line-height: 0.9;
           letter-spacing: 0.02em;
           text-transform: uppercase;
-          color: #e8f4ee;
+          color: #ffffff;
+          text-shadow: 0 0 40px rgba(16,185,129,0.3);
         }
 
         .sl-title-accent {
           display: block;
           color: #10b981;
           font-size: clamp(56px, 7vw, 92px);
+          text-shadow: 0 0 60px rgba(16,185,129,0.6), 0 0 120px rgba(16,185,129,0.2);
         }
 
         .sl-tagline {
           margin-top: 20px;
           font-size: 14px;
-          color: rgba(160,200,180,0.4);
+          color: rgba(200,240,220,0.45);
           letter-spacing: 0.1em;
           text-transform: uppercase;
           line-height: 1.5;
@@ -200,18 +279,19 @@ export default function Login() {
           font-weight: 700;
           color: #10b981;
           letter-spacing: -0.02em;
+          text-shadow: 0 0 20px rgba(16,185,129,0.5);
         }
 
         .sl-stat-lbl {
           font-size: 10px;
-          color: rgba(16,185,129,0.3);
+          color: rgba(180,255,220,0.3);
           letter-spacing: 0.14em;
           text-transform: uppercase;
         }
 
         .sl-stat-div {
           width: 1px;
-          background: rgba(16,185,129,0.15);
+          background: rgba(255,255,255,0.1);
           align-self: stretch;
         }
 
@@ -693,36 +773,46 @@ export default function Login() {
         {/* ── LEFT: BRAND ── */}
         <div className="sl-left">
 
+          {/* Aurora orbs */}
+          <div className="sl-aurora-1" />
+          <div className="sl-aurora-2" />
+          <div className="sl-aurora-3" />
+          <div className="sl-aurora-4" />
+          {/* Grain noise overlay */}
+          <div className="sl-noise" />
+
           {/* Top status */}
           <div className="sl-status">
             <div className="sl-status-dot" />
             <span className="sl-status-txt">SYSTEM ONLINE</span>
           </div>
 
-          {/* Center brand */}
-          <div className="sl-brand">
-            <div className="sl-eyebrow">Tournament Control</div>
-            <h1 className="sl-title">
-              Admin
-              <span className="sl-title-accent">OPS</span>
-            </h1>
-            <p className="sl-tagline">
-              Real-time match control &<br />tournament management
-            </p>
-            <div className="sl-stats">
-              <div className="sl-stat">
-                <span className="sl-stat-val">LIVE</span>
-                <span className="sl-stat-lbl">Status</span>
-              </div>
-              <div className="sl-stat-div" />
-              <div className="sl-stat">
-                <span className="sl-stat-val">v2.0</span>
-                <span className="sl-stat-lbl">Version</span>
-              </div>
-              <div className="sl-stat-div" />
-              <div className="sl-stat">
-                <span className="sl-stat-val">IST</span>
-                <span className="sl-stat-lbl">Timezone</span>
+          {/* Center brand — wrapped in glass card */}
+          <div className="sl-glass-card">
+            <div className="sl-brand">
+              <div className="sl-eyebrow">Tournament Control</div>
+              <h1 className="sl-title">
+                Admin
+                <span className="sl-title-accent">OPS</span>
+              </h1>
+              <p className="sl-tagline">
+                Real-time match control &<br />tournament management
+              </p>
+              <div className="sl-stats">
+                <div className="sl-stat">
+                  <span className="sl-stat-val">LIVE</span>
+                  <span className="sl-stat-lbl">Status</span>
+                </div>
+                <div className="sl-stat-div" />
+                <div className="sl-stat">
+                  <span className="sl-stat-val">v2.0</span>
+                  <span className="sl-stat-lbl">Version</span>
+                </div>
+                <div className="sl-stat-div" />
+                <div className="sl-stat">
+                  <span className="sl-stat-val">IST</span>
+                  <span className="sl-stat-lbl">Timezone</span>
+                </div>
               </div>
             </div>
           </div>
