@@ -208,33 +208,25 @@ export default function Login() {
           background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
         }
 
-        /* ─── RIGHT GLASS CARD (form) — same glass, slightly tighter radius ─── */
-        .sl-form-card {
+        /* ─── RIGHT FORM WRAP — no card, full panel ─── */
+        .sl-form-wrap {
           position: relative; z-index: 3;
-          background: rgba(255,255,255,0.038);
-          border: 1px solid rgba(255,255,255,0.09);
-          border-radius: 14px;
-          padding: 36px 40px 32px;
-          backdrop-filter: blur(22px);
-          -webkit-backdrop-filter: blur(22px);
-          box-shadow: 0 8px 44px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.07);
-          max-width: 440px;
-          width: 100%;
+          display: flex; flex-direction: column; justify-content: center;
+          width: 100%; max-width: 420px;
           opacity: 0;
           animation: sl-up 0.7s cubic-bezier(0.22,1,0.36,1) forwards 0.3s;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
         }
 
-        .sl-form-card::before {
-          content: '';
-          position: absolute; top: 0; left: 16px; right: 16px; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+        /* Thin left accent bar on the form heading */
+        .sl-form-accent {
+          width: 3px; height: 36px;
+          background: linear-gradient(to bottom, #10b981, rgba(16,185,129,0.1));
+          border-radius: 2px;
+          margin-bottom: 14px;
+          box-shadow: 0 0 12px rgba(16,185,129,0.4);
         }
 
-        /* ─── BRAND TEXT ─── */
+        /* ─── NEON CLOCK ─── */
         .sl-eyebrow {
           font-family: 'Space Mono', monospace; font-size: 10px;
           color: rgba(180,255,215,0.65); letter-spacing: 0.22em;
@@ -318,18 +310,37 @@ export default function Login() {
         /* ─── RIGHT PANEL INNER ─── */
         .sl-right-inner {
           position: relative; z-index: 3;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          height: 100%;
-          gap: 0;
-          padding: 20px 0;
+          display: flex; flex-direction: column; justify-content: center;
+          height: 100%; padding: 20px 0;
         }
 
+        /* ─── NEON SWEEP CLOCK ─── */
         .sl-time {
           position: absolute; top: 28px; right: 40px;
-          font-family: 'Space Mono', monospace; font-size: 11px;
-          color: rgba(16,185,129,0.3); letter-spacing: 0.12em; z-index: 3;
+          z-index: 4;
+          font-family: 'Space Mono', monospace;
+          font-size: 15px; font-weight: 700;
+          letter-spacing: 0.18em;
+          /* Neon sweep: color shifts left→right→left */
+          background: linear-gradient(
+            90deg,
+            #10b981 0%,
+            #06ecb0 30%,
+            #ffffff 50%,
+            #06ecb0 70%,
+            #10b981 100%
+          );
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: neon-sweep 2.8s linear infinite;
+          filter: drop-shadow(0 0 8px rgba(16,185,129,0.7)) drop-shadow(0 0 18px rgba(16,185,129,0.35));
+        }
+
+        @keyframes neon-sweep {
+          0%   { background-position: 200% center; }
+          100% { background-position: -200% center; }
         }
 
         /* ─── FORM HEADING ─── */
@@ -601,7 +612,7 @@ export default function Login() {
           .sl-stats { display: none; }
           .sl-divider { display: none; }
           .sl-right { padding: 36px 24px 48px; }
-          .sl-form-card { max-width: 100%; padding: 28px 24px 24px; }
+          .sl-form-wrap { max-width: 100%; }
           .sl-popup { padding: 36px 28px 32px; min-width: 260px; }
         }
       `}</style>
@@ -668,20 +679,21 @@ export default function Login() {
         </div>
 
         {/* ════ RIGHT PANEL ════ */}
-        <div className="sl-panel sl-right" style={{ justifyContent: 'center', padding: '36px 48px' }}>
+        <div className="sl-panel sl-right" style={{ justifyContent: 'center', padding: '36px 56px' }}>
           <div className="sl-grid" />
           <div className="sl-noise" />
 
-          {/* Aurora orbs — green + cyan (subtler, different positions) */}
+          {/* Aurora orbs — green + cyan */}
           <div className="sl-orb sl-r-orb1" />
           <div className="sl-orb sl-r-orb2" />
           <div className="sl-orb sl-r-orb3" />
 
-          {/* Clock */}
+          {/* Neon sweep clock */}
           <div className="sl-time">{mounted ? time : '--:--:--'}</div>
 
-          {/* Glass form card */}
-          <div className="sl-form-card">
+          {/* Open form — no card */}
+          <div className="sl-form-wrap">
+            <div className="sl-form-accent" />
             <div className="sl-form-title">Sign In</div>
             <div className="sl-form-sub">Enter your admin credentials</div>
 
