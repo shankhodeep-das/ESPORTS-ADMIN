@@ -12,6 +12,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [time, setTime] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [popup, setPopup] = useState(null)
 
   useEffect(() => {
     setMounted(true)
@@ -31,15 +32,17 @@ export default function Login() {
     setLoading(true)
     setError('')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(false)
     if (error) {
-      setError('Invalid credentials. Access denied.')
-      setLoading(false)
+      setPopup('denied')
+      setTimeout(() => setPopup(null), 3000)
       return
     }
     if (data.session) {
       document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=3600`
     }
-    router.push('/dashboard')
+    setPopup('granted')
+    setTimeout(() => router.push('/dashboard'), 1800)
   }
 
   return (
@@ -527,6 +530,147 @@ export default function Login() {
           to { transform: rotate(360deg); }
         }
 
+        /* ── POPUP OVERLAY ── */
+        .sl-popup-overlay {
+          position: fixed;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 100;
+          background: rgba(6,8,10,0.75);
+          backdrop-filter: blur(6px);
+          animation: sl-fade 0.25s ease forwards;
+        }
+
+        .sl-popup {
+          position: relative;
+          padding: 40px 52px;
+          text-align: center;
+          animation: sl-popup-in 0.35s cubic-bezier(0.22,1,0.36,1) forwards;
+        }
+
+        @keyframes sl-popup-in {
+          from { opacity: 0; transform: scale(0.88); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+
+        .sl-popup-corners::before,
+        .sl-popup-corners::after {
+          content: '';
+          position: absolute;
+          width: 18px; height: 18px;
+        }
+        .sl-popup-corners::before { top: 0; left: 0; border-top: 2px solid currentColor; border-left: 2px solid currentColor; }
+        .sl-popup-corners::after  { bottom: 0; right: 0; border-bottom: 2px solid currentColor; border-right: 2px solid currentColor; }
+
+        .sl-popup-inner-corners {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+        }
+        .sl-popup-inner-corners span:nth-child(1) { position: absolute; top: 0; right: 0; width: 18px; height: 18px; border-top: 2px solid currentColor; border-right: 2px solid currentColor; }
+        .sl-popup-inner-corners span:nth-child(2) { position: absolute; bottom: 0; left: 0; width: 18px; height: 18px; border-bottom: 2px solid currentColor; border-left: 2px solid currentColor; }
+
+        .sl-popup.granted { color: #10b981; }
+        .sl-popup.denied  { color: #e05555; }
+
+        .sl-popup-icon {
+          width: 56px; height: 56px;
+          border-radius: 50%;
+          border: 2px solid currentColor;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 20px;
+          position: relative;
+        }
+
+        .sl-popup-icon::before {
+          content: '';
+          position: absolute;
+          inset: 6px;
+          border-radius: 50%;
+          border: 1px solid currentColor;
+          opacity: 0.3;
+        }
+
+        .sl-popup-check {
+          width: 22px; height: 22px;
+          position: relative;
+        }
+
+        .sl-popup-check::before {
+          content: '';
+          position: absolute;
+          left: 2px; top: 9px;
+          width: 7px; height: 2px;
+          background: #10b981;
+          transform: rotate(45deg);
+          transform-origin: left center;
+        }
+
+        .sl-popup-check::after {
+          content: '';
+          position: absolute;
+          left: 6px; top: 12px;
+          width: 13px; height: 2px;
+          background: #10b981;
+          transform: rotate(-55deg);
+          transform-origin: left center;
+        }
+
+        .sl-popup-x {
+          width: 20px; height: 20px;
+          position: relative;
+        }
+
+        .sl-popup-x::before,
+        .sl-popup-x::after {
+          content: '';
+          position: absolute;
+          width: 20px; height: 2px;
+          background: #e05555;
+          top: 9px; left: 0;
+          border-radius: 1px;
+        }
+        .sl-popup-x::before { transform: rotate(45deg); }
+        .sl-popup-x::after  { transform: rotate(-45deg); }
+
+        .sl-popup-title {
+          font-family: 'Rajdhani', sans-serif;
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          line-height: 1;
+          margin-bottom: 8px;
+        }
+
+        .sl-popup-sub {
+          font-family: 'Space Mono', monospace;
+          font-size: 10px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          opacity: 0.55;
+        }
+
+        .sl-popup-bar {
+          width: 0;
+          height: 2px;
+          background: currentColor;
+          margin: 16px auto 0;
+          border-radius: 1px;
+          animation: sl-bar-fill 1.8s ease forwards;
+        }
+
+        .sl-popup-bar.denied {
+          animation: sl-bar-fill 3s ease forwards;
+        }
+
+        @keyframes sl-bar-fill {
+          from { width: 0; opacity: 1; }
+          to   { width: 100px; opacity: 1; }
+        }
+
         /* ── RESPONSIVE ── */
         @media (max-width: 768px) {
           .sl-root { flex-direction: column; }
@@ -646,7 +790,7 @@ export default function Login() {
             <div className="sl-btn-wrap">
               <button type="submit" className="sl-btn" disabled={loading}>
                 {loading && <span className="sl-spinner" />}
-                {loading ? 'Authenticating...' : 'Access Dashboard'}
+                {loading ? 'Verifying...' : 'Request for Access'}
               </button>
             </div>
           </form>
@@ -664,6 +808,35 @@ export default function Login() {
 
         </div>
       </div>
+
+      {/* ── ACCESS POPUP ── */}
+      {popup && (
+        <div className="sl-popup-overlay">
+          <div className={`sl-popup sl-popup-corners ${popup}`}>
+            <div className="sl-popup-inner-corners">
+              <span /><span />
+            </div>
+
+            <div className="sl-popup-icon">
+              {popup === 'granted'
+                ? <div className="sl-popup-check" />
+                : <div className="sl-popup-x" />
+              }
+            </div>
+
+            <div className="sl-popup-title">
+              {popup === 'granted' ? 'Access Granted' : 'Access Denied'}
+            </div>
+            <div className="sl-popup-sub">
+              {popup === 'granted'
+                ? 'Redirecting to dashboard...'
+                : 'Invalid credentials. Try again.'
+              }
+            </div>
+            <div className={`sl-popup-bar ${popup}`} />
+          </div>
+        </div>
+      )}
     </>
   )
 }
