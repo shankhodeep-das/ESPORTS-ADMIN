@@ -31,9 +31,7 @@ export default function Dashboard() {
 
   async function fetchMatches() {
     const { data, error } = await supabase
-      .from('matches')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .from('matches').select('*').order('created_at', { ascending: false })
     if (error) console.log('Error:', error)
     else setMatches(data || [])
     setLoading(false)
@@ -41,11 +39,7 @@ export default function Dashboard() {
 
   async function checkLiveMatch() {
     const { data } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('status', 'live')
-      .limit(1)
-      .single()
+      .from('matches').select('*').eq('status', 'live').limit(1).single()
     setLiveMatch(data)
   }
 
@@ -56,9 +50,9 @@ export default function Dashboard() {
   }
 
   const totalMatches = matches.length
-  const liveCount = matches.filter(m => m.status === 'live').length
+  const liveCount    = matches.filter(m => m.status === 'live').length
   const waitingCount = matches.filter(m => m.status === 'waiting').length
-  const finishedCount = matches.filter(m => m.status === 'finished').length
+  const finishedCount= matches.filter(m => m.status === 'finished').length
 
   return (
     <>
@@ -67,9 +61,10 @@ export default function Dashboard() {
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+        /* ══ ROOT ══ */
         .db-root {
           min-height: 100vh;
-          background: #07080b;
+          background: #060709;
           font-family: 'Barlow Condensed', sans-serif;
           color: #e8f4ee;
           position: relative;
@@ -77,479 +72,498 @@ export default function Dashboard() {
           isolation: isolate;
         }
 
-        /* ── BACKGROUND AURORA ORBS ── */
+        /* ══ FIXED AURORA ORBS — stronger opacity ══ */
         .db-orb {
           position: fixed; border-radius: 50%;
           pointer-events: none; z-index: 0;
         }
 
-        .db-orb1 {
-          width: 600px; height: 600px;
-          background: radial-gradient(circle, rgba(16,185,129,0.14) 0%, transparent 65%);
-          top: -200px; left: -150px; filter: blur(70px);
-          animation: db-orb-a 12s ease-in-out infinite alternate;
+        /* Large green — top left */
+        .db-o1 {
+          width: 700px; height: 700px;
+          background: radial-gradient(circle, rgba(16,185,129,0.28) 0%, rgba(16,185,129,0.06) 55%, transparent 70%);
+          top: -260px; left: -180px; filter: blur(55px);
+          animation: oa 14s ease-in-out infinite alternate;
         }
 
-        .db-orb2 {
+        /* Purple — top right */
+        .db-o2 {
+          width: 580px; height: 580px;
+          background: radial-gradient(circle, rgba(124,58,237,0.22) 0%, rgba(109,40,217,0.06) 55%, transparent 70%);
+          top: -160px; right: -140px; filter: blur(58px);
+          animation: ob 17s ease-in-out infinite alternate;
+        }
+
+        /* Cyan — mid left */
+        .db-o3 {
+          width: 460px; height: 460px;
+          background: radial-gradient(circle, rgba(6,182,212,0.16) 0%, transparent 65%);
+          top: 40%; left: -100px; filter: blur(52px);
+          animation: oc 11s ease-in-out infinite alternate;
+        }
+
+        /* Green — bottom right */
+        .db-o4 {
           width: 500px; height: 500px;
-          background: radial-gradient(circle, rgba(124,58,237,0.1) 0%, transparent 65%);
-          top: -100px; right: -120px; filter: blur(65px);
-          animation: db-orb-b 15s ease-in-out infinite alternate;
+          background: radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 65%);
+          bottom: -150px; right: -100px; filter: blur(56px);
+          animation: od 9s ease-in-out infinite alternate;
         }
 
-        .db-orb3 {
-          width: 400px; height: 400px;
-          background: radial-gradient(circle, rgba(6,182,212,0.09) 0%, transparent 65%);
-          bottom: 10%; left: 30%; filter: blur(60px);
-          animation: db-orb-c 10s ease-in-out infinite alternate;
+        /* Pink — center */
+        .db-o5 {
+          width: 340px; height: 340px;
+          background: radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 65%);
+          top: 55%; left: 42%; filter: blur(50px);
+          animation: oa 13s ease-in-out infinite alternate-reverse;
         }
 
-        .db-orb4 {
-          width: 350px; height: 350px;
-          background: radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 65%);
-          bottom: -100px; right: -80px; filter: blur(60px);
-          animation: db-orb-d 8s ease-in-out infinite alternate;
-        }
+        @keyframes oa { from{transform:translate(0,0) scale(1)}  to{transform:translate(55px,-70px) scale(1.14)} }
+        @keyframes ob { from{transform:translate(0,0) scale(1)}  to{transform:translate(-65px,80px) scale(1.2)} }
+        @keyframes oc { from{transform:translate(0,0) scale(1)}  to{transform:translate(45px,-55px) scale(1.1)} }
+        @keyframes od { from{transform:translate(0,0) scale(1)}  to{transform:translate(-40px,60px) scale(1.18)} }
 
-        @keyframes db-orb-a { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,-80px) scale(1.15); } }
-        @keyframes db-orb-b { from { transform: translate(0,0) scale(1); } to { transform: translate(-70px,90px) scale(1.2); } }
-        @keyframes db-orb-c { from { transform: translate(0,0) scale(1); } to { transform: translate(-50px,-60px) scale(1.1); } }
-        @keyframes db-orb-d { from { transform: translate(0,0) scale(1); } to { transform: translate(40px,50px) scale(1.18); } }
-
-        /* Grid texture */
+        /* Grid */
         .db-grid {
           position: fixed; inset: 0; pointer-events: none; z-index: 0;
           background-image:
-            repeating-linear-gradient(0deg,  rgba(16,185,129,0.03) 0px, rgba(16,185,129,0.03) 1px, transparent 1px, transparent 44px),
-            repeating-linear-gradient(90deg, rgba(16,185,129,0.022) 0px, rgba(16,185,129,0.022) 1px, transparent 1px, transparent 44px);
+            repeating-linear-gradient(0deg,  rgba(16,185,129,0.038) 0px, rgba(16,185,129,0.038) 1px, transparent 1px, transparent 44px),
+            repeating-linear-gradient(90deg, rgba(16,185,129,0.028) 0px, rgba(16,185,129,0.028) 1px, transparent 1px, transparent 44px);
         }
 
-        /* Noise grain */
+        /* Noise */
         .db-noise {
           position: fixed; inset: 0; pointer-events: none; z-index: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-          background-size: 180px 180px; mix-blend-mode: overlay; opacity: 0.35;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
+          background-size: 180px 180px; mix-blend-mode: overlay; opacity: 0.38;
         }
 
-        /* ── CONTENT WRAPPER ── */
+        /* ══ CONTENT — full width, tight padding ══ */
         .db-content {
           position: relative; z-index: 2;
-          max-width: 1100px; margin: 0 auto;
-          padding: 32px 40px 60px;
+          padding: 24px 28px 60px;
         }
 
-        /* ── TOP BAR ── */
+        /* ══ TOPBAR ══ */
         .db-topbar {
           display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: 36px;
-          opacity: 0; animation: db-up 0.6s ease forwards 0.05s;
+          padding: 10px 16px 10px 16px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 10px;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          margin-bottom: 24px;
+          opacity: 0; animation: dbup 0.5s ease forwards 0.05s;
+          position: relative; overflow: hidden;
         }
 
-        .db-topbar-left {
-          display: flex; align-items: center; gap: 12px;
+        .db-topbar::before {
+          content: ''; position: absolute;
+          top: 0; left: 20px; right: 20px; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
         }
 
-        .db-status-dot {
+        .db-topbar-left { display: flex; align-items: center; gap: 10px; }
+
+        .db-sdot {
           width: 7px; height: 7px; border-radius: 50%;
-          background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.9);
-          animation: db-pulse 2.2s ease-in-out infinite;
+          background: #10b981; box-shadow: 0 0 9px rgba(16,185,129,0.9);
+          animation: spulse 2.2s ease-in-out infinite;
         }
 
-        @keyframes db-pulse {
-          0%,100% { box-shadow: 0 0 8px rgba(16,185,129,0.9); }
-          50%      { box-shadow: 0 0 3px rgba(16,185,129,0.4); }
+        @keyframes spulse {
+          0%,100% { box-shadow: 0 0 9px rgba(16,185,129,.9); }
+          50%      { box-shadow: 0 0 3px rgba(16,185,129,.3); }
         }
 
-        .db-system-txt {
+        .db-stxt {
           font-family: 'Space Mono', monospace; font-size: 10px;
           color: rgba(16,185,129,0.5); letter-spacing: 0.16em; text-transform: uppercase;
         }
 
         /* Neon sweep clock */
         .db-clock {
-          font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700;
+          font-family: 'Space Mono', monospace; font-size: 17px; font-weight: 700;
           letter-spacing: 0.18em;
-          background: linear-gradient(90deg, #10b981 0%, #06ecb0 30%, #ffffff 50%, #06ecb0 70%, #10b981 100%);
+          background: linear-gradient(90deg, #10b981 0%, #06ecb0 28%, #ffffff 50%, #06ecb0 72%, #10b981 100%);
           background-size: 200% auto;
           -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-          animation: neon-sweep 2.8s linear infinite;
-          filter: drop-shadow(0 0 8px rgba(16,185,129,0.7)) drop-shadow(0 0 18px rgba(16,185,129,0.3));
+          animation: nsweep 2.8s linear infinite;
+          filter: drop-shadow(0 0 9px rgba(16,185,129,0.75)) drop-shadow(0 0 22px rgba(16,185,129,0.3));
         }
 
-        @keyframes neon-sweep {
+        @keyframes nsweep {
           0%   { background-position: 200% center; }
           100% { background-position: -200% center; }
         }
 
         .db-clock-sub {
           font-family: 'Space Mono', monospace; font-size: 9px;
-          color: rgba(16,185,129,0.25); letter-spacing: 0.14em;
-          text-transform: uppercase; text-align: right; margin-top: 2px;
+          color: rgba(16,185,129,0.22); letter-spacing: 0.13em;
+          text-transform: uppercase; text-align: right; margin-top: 1px;
         }
 
-        /* ── HEADER ROW ── */
+        /* ══ HEADER ══ */
         .db-header {
           display: flex; align-items: flex-start; justify-content: space-between;
-          margin-bottom: 32px;
-          opacity: 0; animation: db-up 0.6s ease forwards 0.12s;
+          margin-bottom: 28px;
+          opacity: 0; animation: dbup 0.6s ease forwards 0.12s;
         }
-
-        .db-title-wrap {}
 
         .db-eyebrow {
           font-family: 'Space Mono', monospace; font-size: 10px;
-          color: rgba(16,185,129,0.45); letter-spacing: 0.22em;
+          color: rgba(16,185,129,0.4); letter-spacing: 0.22em;
           text-transform: uppercase; margin-bottom: 6px;
           display: flex; align-items: center; gap: 10px;
         }
 
-        .db-eyebrow::before {
-          content: ''; width: 22px; height: 1px;
-          background: rgba(16,185,129,0.4); display: block;
-        }
+        .db-eyebrow::before { content:''; width:22px; height:1px; background:rgba(16,185,129,0.38); display:block; }
 
         .db-page-title {
-          font-family: 'Rajdhani', sans-serif; font-size: 42px; font-weight: 700;
-          line-height: 0.9; letter-spacing: 0.04em; text-transform: uppercase;
-          color: #fff;
+          font-family: 'Rajdhani', sans-serif; font-size: 48px; font-weight: 700;
+          line-height: 0.88; letter-spacing: 0.04em; text-transform: uppercase; color: #fff;
         }
 
-        .db-page-title span { color: #10b981; }
+        .db-page-title span { color: #10b981; text-shadow: 0 0 28px rgba(16,185,129,0.45); }
 
         /* Live banner */
         .db-live-banner {
-          display: flex; align-items: center; gap: 8px;
-          background: rgba(220,55,55,0.08);
-          border: 1px solid rgba(220,55,55,0.22);
-          border-radius: 6px;
-          padding: 8px 14px; margin-top: 12px; width: fit-content;
+          display: inline-flex; align-items: center; gap: 8px;
+          background: rgba(232,64,64,0.1);
+          border: 1px solid rgba(232,64,64,0.28);
+          border-radius: 6px; padding: 7px 14px; margin-top: 12px;
+          backdrop-filter: blur(8px);
         }
 
         .db-live-dot {
           width: 8px; height: 8px; border-radius: 50%; background: #e84040;
-          box-shadow: 0 0 8px rgba(232,64,64,0.9);
-          animation: db-pulse-red 1.4s ease-in-out infinite;
+          animation: reddot 1.4s ease-in-out infinite;
         }
 
-        @keyframes db-pulse-red {
-          0%,100% { box-shadow: 0 0 8px rgba(232,64,64,0.9); transform: scale(1); }
-          50%      { box-shadow: 0 0 16px rgba(232,64,64,0.6); transform: scale(1.15); }
+        @keyframes reddot {
+          0%,100% { box-shadow: 0 0 8px rgba(232,64,64,0.9); transform:scale(1); }
+          50%      { box-shadow: 0 0 18px rgba(232,64,64,0.5); transform:scale(1.2); }
         }
 
         .db-live-txt {
           font-family: 'Space Mono', monospace; font-size: 10px;
-          color: rgba(232,64,64,0.85); letter-spacing: 0.14em; text-transform: uppercase;
+          color: rgba(232,64,64,0.85); letter-spacing: 0.13em; text-transform: uppercase;
         }
 
         /* Action buttons */
-        .db-actions { display: flex; align-items: center; gap: 10px; }
+        .db-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; }
 
         .db-btn {
-          display: flex; align-items: center; gap: 7px;
-          padding: 10px 18px; border-radius: 4px;
-          font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
-          font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
-          cursor: pointer; transition: all 0.2s; text-decoration: none;
-          border: none; white-space: nowrap;
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 10px 20px; border-radius: 6px;
+          font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 600;
+          letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
+          transition: all 0.2s; text-decoration: none; border: none; white-space: nowrap;
         }
 
         .db-btn-glass {
-          background: rgba(255,255,255,0.05);
-          border: 1px solid rgba(255,255,255,0.1);
-          color: rgba(220,240,230,0.7);
-          backdrop-filter: blur(8px);
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.11);
+          color: rgba(210,235,220,0.65);
+          backdrop-filter: blur(12px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
         }
 
         .db-btn-glass:hover {
-          background: rgba(255,255,255,0.09);
-          border-color: rgba(16,185,129,0.3);
-          color: #e8f4ee;
-          transform: translateY(-1px);
+          background: rgba(255,255,255,0.1);
+          border-color: rgba(16,185,129,0.35);
+          color: #e8f4ee; transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
         .db-btn-primary {
           background: #10b981; color: #021a0e;
           position: relative; overflow: hidden;
+          box-shadow: 0 4px 20px rgba(16,185,129,0.3);
         }
 
         .db-btn-primary::after {
-          content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
-          transition: left 0.4s ease;
+          content: ''; position: absolute; top:0; left:-100%; width:50%; height:100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+          transition: left 0.42s ease;
         }
 
-        .db-btn-primary:hover::after { left: 160%; }
-        .db-btn-primary:hover { background: #0ecf8e; transform: translateY(-2px); box-shadow: 0 6px 24px rgba(16,185,129,0.35); }
+        .db-btn-primary:hover::after { left:160%; }
+        .db-btn-primary:hover { background:#0ecf8e; transform:translateY(-2px); box-shadow:0 8px 28px rgba(16,185,129,0.45); }
 
-        .db-btn-danger {
-          background: transparent; border: none;
-          color: rgba(220,80,80,0.7);
+        .db-btn-logout {
+          background: transparent; border: 1px solid rgba(232,64,64,0.2);
+          color: rgba(232,64,64,0.6);
           font-family: 'Space Mono', monospace; font-size: 10px;
-          letter-spacing: 0.14em; cursor: pointer;
-          transition: color 0.2s; padding: 10px 6px;
+          letter-spacing: 0.14em; cursor: pointer; padding: 10px 14px;
+          border-radius: 6px; transition: all 0.2s;
+          backdrop-filter: blur(8px);
         }
 
-        .db-btn-danger:hover { color: rgba(232,64,64,0.95); }
+        .db-btn-logout:hover { border-color:rgba(232,64,64,0.5); color:rgba(232,64,64,0.9); background:rgba(232,64,64,0.06); }
 
-        /* ── STAT CARDS ── */
+        /* ══ STAT CARDS ══ */
         .db-stats {
           display: grid; grid-template-columns: repeat(4, 1fr);
-          gap: 14px; margin-bottom: 32px;
-          opacity: 0; animation: db-up 0.6s ease forwards 0.2s;
+          gap: 14px; margin-bottom: 28px;
+          opacity: 0; animation: dbup 0.6s ease forwards 0.2s;
         }
 
-        .db-stat-card {
+        .db-stat {
           position: relative; overflow: hidden;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.09);
-          border-radius: 12px; padding: 20px 22px;
-          backdrop-filter: blur(16px);
-          transition: border-color 0.2s, transform 0.2s;
+          background: rgba(255,255,255,0.055);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 14px; padding: 22px 24px 18px;
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          box-shadow: 0 4px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
+          transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
         }
 
-        .db-stat-card::before {
+        /* Top shine line */
+        .db-stat::before {
           content: ''; position: absolute;
-          top: 0; left: 16px; right: 16px; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);
+          top: 0; left: 18px; right: 18px; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
         }
 
-        .db-stat-card:hover {
-          border-color: rgba(16,185,129,0.22);
-          transform: translateY(-2px);
+        .db-stat:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
         }
 
-        .db-stat-card-accent {
+        /* Bottom coloured glow bar */
+        .db-stat-glow {
           position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-          border-radius: 0 0 12px 12px;
+          border-radius: 0 0 14px 14px;
+        }
+
+        /* Mini orb inside stat card */
+        .db-stat-orb {
+          position: absolute; width: 120px; height: 120px; border-radius: 50%;
+          bottom: -50px; right: -30px; filter: blur(30px); pointer-events: none;
         }
 
         .db-stat-lbl {
           font-family: 'Space Mono', monospace; font-size: 9px;
-          color: rgba(160,200,180,0.4); letter-spacing: 0.18em;
-          text-transform: uppercase; margin-bottom: 10px;
+          color: rgba(160,200,175,0.4); letter-spacing: 0.18em;
+          text-transform: uppercase; margin-bottom: 12px; position: relative; z-index: 1;
         }
 
         .db-stat-val {
-          font-family: 'Rajdhani', sans-serif; font-size: 38px; font-weight: 700;
-          line-height: 1; letter-spacing: 0.02em;
+          font-family: 'Rajdhani', sans-serif; font-size: 48px; font-weight: 700;
+          line-height: 1; letter-spacing: 0.01em; position: relative; z-index: 1;
         }
 
-        .db-stat-val.green  { color: #10b981; text-shadow: 0 0 20px rgba(16,185,129,0.35); }
-        .db-stat-val.red    { color: #e84040; text-shadow: 0 0 20px rgba(232,64,64,0.3); }
-        .db-stat-val.yellow { color: #f5c842; text-shadow: 0 0 20px rgba(245,200,66,0.3); }
-        .db-stat-val.white  { color: #e8f4ee; }
+        .db-sv-white  { color: #e8f4ee; text-shadow: 0 0 30px rgba(232,244,238,0.15); }
+        .db-sv-red    { color: #e84040; text-shadow: 0 0 28px rgba(232,64,64,0.5); }
+        .db-sv-yellow { color: #f5c842; text-shadow: 0 0 28px rgba(245,200,66,0.45); }
+        .db-sv-green  { color: #10b981; text-shadow: 0 0 28px rgba(16,185,129,0.5); }
 
         .db-stat-sub {
-          font-size: 11px; color: rgba(160,200,180,0.3);
-          letter-spacing: 0.06em; margin-top: 4px;
+          font-size: 11px; color: rgba(160,200,175,0.3);
+          letter-spacing: 0.06em; margin-top: 5px; position: relative; z-index: 1;
         }
 
-        /* ── SECTION LABEL ── */
-        .db-section-head {
+        /* ══ SECTION HEAD ══ */
+        .db-sec-head {
           display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: 16px;
-          opacity: 0; animation: db-up 0.5s ease forwards 0.3s;
+          margin-bottom: 14px;
+          opacity: 0; animation: dbup 0.5s ease forwards 0.3s;
         }
 
-        .db-section-title {
+        .db-sec-title {
           font-family: 'Space Mono', monospace; font-size: 10px;
-          color: rgba(16,185,129,0.45); letter-spacing: 0.2em; text-transform: uppercase;
+          color: rgba(16,185,129,0.42); letter-spacing: 0.2em; text-transform: uppercase;
           display: flex; align-items: center; gap: 10px;
         }
 
-        .db-section-title::before {
-          content: ''; width: 20px; height: 1px;
-          background: rgba(16,185,129,0.35); display: block;
-        }
+        .db-sec-title::before { content:''; width:18px; height:1px; background:rgba(16,185,129,0.32); display:block; }
 
-        .db-section-count {
+        .db-sec-count {
           font-family: 'Space Mono', monospace; font-size: 9px;
-          color: rgba(16,185,129,0.25); letter-spacing: 0.12em;
+          color: rgba(16,185,129,0.22); letter-spacing: 0.12em;
         }
 
-        /* ── MATCH LIST ── */
-        .db-matches {
-          display: flex; flex-direction: column; gap: 10px;
-        }
+        /* ══ MATCH CARDS ══ */
+        .db-matches { display: flex; flex-direction: column; gap: 10px; }
 
-        .db-match-card {
+        .db-mc {
           position: relative; overflow: hidden;
-          background: rgba(255,255,255,0.038);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 10px; padding: 18px 22px;
-          backdrop-filter: blur(14px);
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 12px; padding: 20px 22px 20px 26px;
+          backdrop-filter: blur(22px);
+          -webkit-backdrop-filter: blur(22px);
+          box-shadow: 0 4px 28px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
           display: flex; align-items: center; justify-content: space-between;
           transition: all 0.25s;
-          opacity: 0; animation: db-up 0.5s ease forwards;
+          opacity: 0; animation: dbup 0.5s ease forwards;
         }
 
-        .db-match-card::before {
+        /* Top shine */
+        .db-mc::before {
           content: ''; position: absolute;
-          top: 0; left: 16px; right: 16px; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+          top: 0; left: 20px; right: 20px; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
         }
 
-        .db-match-card:hover {
-          background: rgba(255,255,255,0.055);
-          border-color: rgba(16,185,129,0.2);
-          transform: translateX(4px);
+        .db-mc:hover {
+          background: rgba(255,255,255,0.075);
+          border-color: rgba(16,185,129,0.28);
+          transform: translateX(5px);
+          box-shadow: 0 8px 36px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
-        /* Live match gets a green left border glow */
-        .db-match-card.is-live {
-          border-color: rgba(232,64,64,0.25);
-          background: rgba(232,64,64,0.04);
+        /* Live card tint */
+        .db-mc.is-live {
+          background: rgba(232,64,64,0.06);
+          border-color: rgba(232,64,64,0.22);
         }
 
-        .db-match-card.is-live:hover {
-          border-color: rgba(232,64,64,0.4);
-        }
+        .db-mc.is-live:hover { border-color:rgba(232,64,64,0.42); background:rgba(232,64,64,0.09); }
 
         /* Left status bar */
-        .db-match-bar {
+        .db-mcbar {
           position: absolute; left: 0; top: 0; bottom: 0;
-          width: 3px; border-radius: 10px 0 0 10px;
+          width: 4px; border-radius: 12px 0 0 12px;
         }
 
-        .db-match-bar.live    { background: #e84040; box-shadow: 0 0 10px rgba(232,64,64,0.7); animation: bar-glow-red 1.6s ease-in-out infinite; }
-        .db-match-bar.waiting { background: #f5c842; box-shadow: 0 0 8px rgba(245,200,66,0.5); }
-        .db-match-bar.finished { background: rgba(255,255,255,0.15); }
+        .db-mcbar.live    { background:#e84040; box-shadow:2px 0 14px rgba(232,64,64,0.65); animation:barglowR 1.6s ease-in-out infinite; }
+        .db-mcbar.waiting { background:#f5c842; box-shadow:2px 0 10px rgba(245,200,66,0.5); }
+        .db-mcbar.finished{ background:rgba(255,255,255,0.12); }
 
-        @keyframes bar-glow-red {
-          0%,100% { box-shadow: 0 0 8px rgba(232,64,64,0.6); }
-          50%      { box-shadow: 0 0 18px rgba(232,64,64,0.9); }
+        @keyframes barglowR {
+          0%,100% { box-shadow:2px 0 10px rgba(232,64,64,0.5); }
+          50%      { box-shadow:2px 0 22px rgba(232,64,64,0.9); }
         }
 
-        .db-match-left { display: flex; flex-direction: column; gap: 5px; padding-left: 8px; }
-
-        .db-match-title {
-          font-family: 'Rajdhani', sans-serif; font-size: 20px; font-weight: 700;
-          color: #ffffff; letter-spacing: 0.04em; text-transform: uppercase;
+        /* Inner orb on match card */
+        .db-mc-orb {
+          position: absolute; width: 200px; height: 200px; border-radius: 50%;
+          right: -60px; top: 50%; transform: translateY(-50%);
+          filter: blur(38px); pointer-events: none; opacity: 0.5;
         }
 
-        .db-match-meta {
-          display: flex; align-items: center; gap: 14px;
+        .db-mc-left { display: flex; flex-direction: column; gap: 5px; position: relative; z-index: 1; }
+
+        .db-mc-title {
+          font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 700;
+          color: #fff; letter-spacing: 0.04em; text-transform: uppercase;
         }
 
-        .db-meta-item {
+        .db-mc-meta {
+          display: flex; align-items: center; gap: 10px;
+        }
+
+        .db-mm {
           font-family: 'Space Mono', monospace; font-size: 9px;
-          color: rgba(160,200,180,0.4); letter-spacing: 0.1em; text-transform: uppercase;
-          display: flex; align-items: center; gap: 5px;
+          color: rgba(160,200,175,0.42); letter-spacing: 0.1em; text-transform: uppercase;
         }
 
-        .db-meta-dot {
+        .db-mm-sep {
           width: 3px; height: 3px; border-radius: 50%;
-          background: rgba(16,185,129,0.3);
+          background: rgba(16,185,129,0.28); flex-shrink: 0;
         }
 
-        .db-match-right { display: flex; align-items: center; gap: 12px; }
+        .db-mc-right { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
 
         /* Status pill */
         .db-pill {
           font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
           letter-spacing: 0.14em; text-transform: uppercase;
-          padding: 4px 10px; border-radius: 3px;
+          padding: 5px 12px; border-radius: 4px;
         }
 
-        .db-pill.live    { background: rgba(232,64,64,0.15); color: #e84040; border: 1px solid rgba(232,64,64,0.3); }
-        .db-pill.waiting { background: rgba(245,200,66,0.12); color: #f5c842; border: 1px solid rgba(245,200,66,0.28); }
-        .db-pill.finished { background: rgba(255,255,255,0.05); color: rgba(160,180,170,0.5); border: 1px solid rgba(255,255,255,0.08); }
+        .db-pill.live    { background:rgba(232,64,64,0.15); color:#e84040; border:1px solid rgba(232,64,64,0.35); }
+        .db-pill.waiting { background:rgba(245,200,66,0.12); color:#f5c842; border:1px solid rgba(245,200,66,0.3); }
+        .db-pill.finished{ background:rgba(255,255,255,0.05); color:rgba(160,180,170,0.45); border:1px solid rgba(255,255,255,0.08); }
 
         /* Manage button */
-        .db-manage-btn {
-          display: flex; align-items: center; gap: 6px;
-          padding: 8px 16px; border-radius: 4px;
-          background: rgba(16,185,129,0.12);
-          border: 1px solid rgba(16,185,129,0.25);
+        .db-manage {
+          display: inline-flex; align-items: center; gap: 7px;
+          padding: 9px 18px; border-radius: 6px;
+          background: rgba(16,185,129,0.1);
+          border: 1px solid rgba(16,185,129,0.28);
           color: #10b981;
           font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
           font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
-          text-decoration: none; cursor: pointer;
-          transition: all 0.2s;
+          text-decoration: none; cursor: pointer; transition: all 0.2s;
           white-space: nowrap;
+          backdrop-filter: blur(8px);
+          box-shadow: 0 0 12px rgba(16,185,129,0.08);
         }
 
-        .db-manage-btn:hover {
-          background: rgba(16,185,129,0.2);
-          border-color: rgba(16,185,129,0.5);
-          box-shadow: 0 0 16px rgba(16,185,129,0.2);
-          transform: translateY(-1px);
+        .db-manage:hover {
+          background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.55);
+          box-shadow: 0 0 22px rgba(16,185,129,0.25);
+          transform: translateY(-2px);
         }
 
-        .db-manage-arrow {
-          font-size: 14px; transition: transform 0.2s;
-        }
-
-        .db-manage-btn:hover .db-manage-arrow { transform: translateX(3px); }
+        .db-manage-arr { transition: transform 0.2s; }
+        .db-manage:hover .db-manage-arr { transform: translateX(4px); }
 
         /* Empty state */
         .db-empty {
-          text-align: center; padding: 60px 20px;
+          text-align: center; padding: 70px 20px;
           background: rgba(255,255,255,0.03);
-          border: 1px dashed rgba(16,185,129,0.15);
-          border-radius: 12px;
-        }
-
-        .db-empty-icon {
-          font-family: 'Rajdhani', sans-serif; font-size: 48px; font-weight: 700;
-          color: rgba(16,185,129,0.15); letter-spacing: 0.1em; margin-bottom: 12px;
+          border: 1px dashed rgba(16,185,129,0.14);
+          border-radius: 14px;
+          backdrop-filter: blur(12px);
         }
 
         .db-empty-txt {
           font-family: 'Space Mono', monospace; font-size: 10px;
-          color: rgba(16,185,129,0.25); letter-spacing: 0.16em; text-transform: uppercase;
+          color: rgba(16,185,129,0.22); letter-spacing: 0.16em; text-transform: uppercase;
+          margin-top: 12px;
         }
 
-        /* Loading skeleton */
-        .db-skeleton {
-          height: 72px; border-radius: 10px;
-          background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 75%);
+        /* Loading skeletons */
+        .db-skel {
+          height: 76px; border-radius: 12px; margin-bottom: 10px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
           background-size: 200% 100%;
-          animation: shimmer 1.6s infinite;
-          margin-bottom: 10px;
+          animation: shimmer 1.5s infinite;
         }
 
-        @keyframes shimmer {
-          from { background-position: 200% center; }
-          to   { background-position: -200% center; }
-        }
+        @keyframes shimmer { from{background-position:200% center} to{background-position:-200% center} }
 
-        /* ── KEYFRAMES ── */
-        @keyframes db-up {
-          from { opacity: 0; transform: translateY(16px); }
-          to   { opacity: 1; transform: translateY(0); }
+        /* Keyframes */
+        @keyframes dbup {
+          from { opacity:0; transform:translateY(18px); }
+          to   { opacity:1; transform:translateY(0); }
         }
 
         /* Responsive */
         @media (max-width: 900px) {
-          .db-content { padding: 24px 20px 48px; }
+          .db-content { padding: 16px 14px 48px; }
           .db-stats { grid-template-columns: repeat(2, 1fr); }
           .db-header { flex-direction: column; gap: 16px; align-items: flex-start; }
-          .db-actions { flex-wrap: wrap; }
+          .db-page-title { font-size: 36px; }
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 560px) {
           .db-stats { grid-template-columns: repeat(2, 1fr); }
-          .db-topbar { flex-direction: column; gap: 8px; align-items: flex-start; }
         }
       `}</style>
 
       <div className="db-root">
-        {/* Background */}
         <div className="db-grid" />
         <div className="db-noise" />
-        <div className="db-orb db-orb1" />
-        <div className="db-orb db-orb2" />
-        <div className="db-orb db-orb3" />
-        <div className="db-orb db-orb4" />
+        <div className="db-orb db-o1" />
+        <div className="db-orb db-o2" />
+        <div className="db-orb db-o3" />
+        <div className="db-orb db-o4" />
+        <div className="db-orb db-o5" />
 
         <div className="db-content">
 
-          {/* ── TOP STATUS BAR ── */}
+          {/* ── TOPBAR ── */}
           <div className="db-topbar">
             <div className="db-topbar-left">
-              <div className="db-status-dot" />
-              <span className="db-system-txt">System Online</span>
+              <div className="db-sdot" />
+              <span className="db-stxt">System Online</span>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div className="db-clock">{mounted ? time : '--:--:--'}</div>
@@ -559,11 +573,9 @@ export default function Dashboard() {
 
           {/* ── HEADER ── */}
           <div className="db-header">
-            <div className="db-title-wrap">
+            <div>
               <div className="db-eyebrow">Tournament Ops</div>
-              <h1 className="db-page-title">
-                Match <span>Dashboard</span>
-              </h1>
+              <h1 className="db-page-title">Match <span>Dashboard</span></h1>
               {liveMatch && (
                 <div className="db-live-banner">
                   <div className="db-live-dot" />
@@ -574,71 +586,76 @@ export default function Dashboard() {
 
             <div className="db-actions">
               <Link href="/tournaments" style={{ textDecoration: 'none' }}>
-                <button className="db-btn db-btn-glass">
-                  Tournaments
-                </button>
+                <button className="db-btn db-btn-glass">Tournaments</button>
               </Link>
               <Link href="/themes" style={{ textDecoration: 'none' }}>
-                <button className="db-btn db-btn-glass">
-                  Themes
-                </button>
+                <button className="db-btn db-btn-glass">Themes</button>
               </Link>
               <Link href="/match/create" style={{ textDecoration: 'none' }}>
-                <button className="db-btn db-btn-primary">
-                  + New Match
-                </button>
+                <button className="db-btn db-btn-primary">+ New Match</button>
               </Link>
-              <button className="db-btn-danger" onClick={handleLogout}>
-                LOGOUT
-              </button>
+              <button className="db-btn-logout" onClick={handleLogout}>LOGOUT</button>
             </div>
           </div>
 
           {/* ── STAT CARDS ── */}
           <div className="db-stats">
-            <div className="db-stat-card">
-              <div className="db-stat-card-accent" style={{ background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.4), transparent)' }} />
+            {/* Total */}
+            <div className="db-stat">
+              <div className="db-stat-orb" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.35) 0%, transparent 70%)' }} />
+              <div className="db-stat-glow" style={{ background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.55), transparent)' }} />
               <div className="db-stat-lbl">Total Matches</div>
-              <div className="db-stat-val white">{totalMatches}</div>
+              <div className={`db-stat-val db-sv-white`}>{totalMatches}</div>
               <div className="db-stat-sub">all time</div>
             </div>
-            <div className="db-stat-card">
-              <div className="db-stat-card-accent" style={{ background: 'linear-gradient(90deg, transparent, rgba(232,64,64,0.5), transparent)' }} />
+
+            {/* Live */}
+            <div className="db-stat">
+              <div className="db-stat-orb" style={{ background: 'radial-gradient(circle, rgba(232,64,64,0.4) 0%, transparent 70%)' }} />
+              <div className="db-stat-glow" style={{ background: 'linear-gradient(90deg, transparent, rgba(232,64,64,0.6), transparent)' }} />
               <div className="db-stat-lbl">Live Now</div>
-              <div className="db-stat-val red">{liveCount}</div>
+              <div className={`db-stat-val db-sv-red`}>{liveCount}</div>
               <div className="db-stat-sub">{liveCount > 0 ? 'in progress' : 'no active match'}</div>
             </div>
-            <div className="db-stat-card">
-              <div className="db-stat-card-accent" style={{ background: 'linear-gradient(90deg, transparent, rgba(245,200,66,0.4), transparent)' }} />
+
+            {/* Waiting */}
+            <div className="db-stat">
+              <div className="db-stat-orb" style={{ background: 'radial-gradient(circle, rgba(245,200,66,0.35) 0%, transparent 70%)' }} />
+              <div className="db-stat-glow" style={{ background: 'linear-gradient(90deg, transparent, rgba(245,200,66,0.5), transparent)' }} />
               <div className="db-stat-lbl">Waiting</div>
-              <div className="db-stat-val yellow">{waitingCount}</div>
+              <div className={`db-stat-val db-sv-yellow`}>{waitingCount}</div>
               <div className="db-stat-sub">queued up</div>
             </div>
-            <div className="db-stat-card">
-              <div className="db-stat-card-accent" style={{ background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.3), transparent)' }} />
+
+            {/* Finished */}
+            <div className="db-stat">
+              <div className="db-stat-orb" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.32) 0%, transparent 70%)' }} />
+              <div className="db-stat-glow" style={{ background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.45), transparent)' }} />
               <div className="db-stat-lbl">Finished</div>
-              <div className="db-stat-val green">{finishedCount}</div>
+              <div className={`db-stat-val db-sv-green`}>{finishedCount}</div>
               <div className="db-stat-sub">completed</div>
             </div>
           </div>
 
-          {/* ── MATCH LIST ── */}
-          <div className="db-section-head">
-            <div className="db-section-title">All Matches</div>
-            <div className="db-section-count">{totalMatches} total</div>
+          {/* ── MATCHES ── */}
+          <div className="db-sec-head">
+            <div className="db-sec-title">All Matches</div>
+            <div className="db-sec-count">{totalMatches} total</div>
           </div>
 
           {loading && (
             <div>
-              <div className="db-skeleton" />
-              <div className="db-skeleton" style={{ opacity: 0.7 }} />
-              <div className="db-skeleton" style={{ opacity: 0.4 }} />
+              <div className="db-skel" />
+              <div className="db-skel" style={{ opacity: 0.65 }} />
+              <div className="db-skel" style={{ opacity: 0.35 }} />
             </div>
           )}
 
           {!loading && matches.length === 0 && (
             <div className="db-empty">
-              <div className="db-empty-icon">NO MATCHES</div>
+              <div style={{ fontFamily: "'Rajdhani',sans-serif", fontSize: 40, fontWeight: 700, color: 'rgba(16,185,129,0.12)', letterSpacing: '0.1em' }}>
+                NO MATCHES YET
+              </div>
               <div className="db-empty-txt">Create your first match to get started</div>
             </div>
           )}
@@ -648,29 +665,38 @@ export default function Dashboard() {
               {matches.map((match, i) => (
                 <div
                   key={match.id}
-                  className={`db-match-card ${match.status === 'live' ? 'is-live' : ''}`}
-                  style={{ animationDelay: `${0.35 + i * 0.07}s` }}
+                  className={`db-mc ${match.status === 'live' ? 'is-live' : ''}`}
+                  style={{ animationDelay: `${0.35 + i * 0.06}s` }}
                 >
-                  {/* Left status bar */}
-                  <div className={`db-match-bar ${match.status}`} />
+                  {/* Left bar */}
+                  <div className={`db-mcbar ${match.status}`} />
 
-                  <div className="db-match-left">
-                    <div className="db-match-title">{match.title}</div>
-                    <div className="db-match-meta">
-                      <div className="db-meta-item">{match.map}</div>
-                      <div className="db-meta-dot" />
-                      <div className="db-meta-item">{match.round}</div>
+                  {/* Inner orb glow */}
+                  <div className="db-mc-orb" style={{
+                    background: match.status === 'live'
+                      ? 'radial-gradient(circle, rgba(232,64,64,0.18) 0%, transparent 70%)'
+                      : match.status === 'waiting'
+                      ? 'radial-gradient(circle, rgba(245,200,66,0.12) 0%, transparent 70%)'
+                      : 'radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 70%)'
+                  }} />
+
+                  <div className="db-mc-left">
+                    <div className="db-mc-title">{match.title}</div>
+                    <div className="db-mc-meta">
+                      <span className="db-mm">{match.map}</span>
+                      <div className="db-mm-sep" />
+                      <span className="db-mm">{match.round}</span>
                     </div>
                   </div>
 
-                  <div className="db-match-right">
+                  <div className="db-mc-right">
                     <div className={`db-pill ${match.status}`}>
                       {match.status === 'live' && '● '}
                       {match.status.toUpperCase()}
                     </div>
                     <Link href={`/match/${match.id}`} style={{ textDecoration: 'none' }}>
-                      <div className="db-manage-btn">
-                        Manage <span className="db-manage-arrow">→</span>
+                      <div className="db-manage">
+                        Manage <span className="db-manage-arr">→</span>
                       </div>
                     </Link>
                   </div>
