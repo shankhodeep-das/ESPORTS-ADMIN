@@ -103,7 +103,6 @@ function MainOverlayContent() {
       setCurrentMatch(m)
     }
 
-    // Fetch theme for this match
     fetchTheme(liveMatchId)
 
     const { data } = await supabase
@@ -188,8 +187,6 @@ function MainOverlayContent() {
   const showLeaderboard = settings?.show_leaderboard !== false
   const showFinal4 = settings?.show_final4 !== false
 
-  // Theme shortcuts with fallbacks
-  const lb = theme?.leaderboard_theme || {}
   const f4 = theme?.final4_theme || {}
   const by = theme?.booyah_theme || {}
 
@@ -227,7 +224,7 @@ function MainOverlayContent() {
     return '0px'
   }
 
-  // BOOYAH STATE
+  // ─── BOOYAH SCREEN ───────────────────────────────────────────────────────────
   if (overlayState === 'booyah') {
     return (
       <main
@@ -267,6 +264,48 @@ function MainOverlayContent() {
     )
   }
 
+  // ─── RANK HELPERS ─────────────────────────────────────────────────────────────
+  const SUPS = ['', 'ST', 'ND', 'RD', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH']
+
+  function getRankColor(rank) {
+    if (rank === 1) return '#FFD700'
+    if (rank === 2) return '#D4D4D4'
+    if (rank === 3) return '#cd7f32'
+    return 'rgba(180,190,210,0.5)'
+  }
+
+  function getBarAlive(rank) {
+    if (rank === 1) return '#FFD700'
+    if (rank === 2) return '#C0C0C0'
+    if (rank === 3) return '#E8A060'
+    return '#e8c96a'
+  }
+
+  function getKillsColor(rank, isElim) {
+    if (rank === 1) return '#FFD700'
+    if (rank === 2) return '#D4D4D4'
+    if (rank === 3) return '#cd7f32'
+    if (isElim) return 'rgba(240,236,224,0.3)'
+    return '#f0ece0'
+  }
+
+  function getLeftBar(rank, isElim) {
+    if (rank === 1) return '#FFD700'
+    if (rank === 2) return '#C0C0C0'
+    if (rank === 3) return '#cd7f32'
+    if (isElim) return 'rgba(255,60,60,0.4)'
+    return 'rgba(200,168,76,0.15)'
+  }
+
+  function getRowBg(rank, isElim) {
+    if (rank === 1) return 'linear-gradient(90deg, rgba(30,22,0,0.97) 0%, rgba(10,8,4,0.93) 100%)'
+    if (rank === 2) return 'linear-gradient(90deg, rgba(20,20,22,0.97) 0%, rgba(8,8,12,0.93) 100%)'
+    if (rank === 3) return 'linear-gradient(90deg, rgba(22,14,4,0.97) 0%, rgba(8,8,12,0.93) 100%)'
+    if (isElim)    return 'linear-gradient(90deg, rgba(20,5,5,0.95) 0%, rgba(8,8,12,0.90) 100%)'
+    return 'linear-gradient(90deg, rgba(12,9,4,0.96) 0%, rgba(8,8,12,0.92) 100%)'
+  }
+
+  // ─── MAIN RETURN ──────────────────────────────────────────────────────────────
   return (
     <main
       className="min-h-screen bg-transparent overflow-hidden relative"
@@ -274,7 +313,10 @@ function MainOverlayContent() {
       onMouseUp={stopDrag}
       onMouseLeave={stopDrag}
     >
-      {/* LEADERBOARD PANEL */}
+
+      {/* ═══════════════════════════════════════════════════════
+          LEADERBOARD PANEL — CINEMATIC GOLD STYLE
+      ═══════════════════════════════════════════════════════ */}
       {showLeaderboard && overlayState === 'leaderboard' && (
         <div
           className="absolute select-none"
@@ -282,141 +324,227 @@ function MainOverlayContent() {
             left: leaderboardPos.x,
             top: leaderboardPos.y,
             width: leaderboardSize.width,
-            height: leaderboardSize.height,
           }}
         >
-          {/* Header */}
+
+          {/* Match label bar */}
           <div
-            className="rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing flex justify-between items-center"
+            className="flex items-center justify-between px-3 py-1"
             style={{
-              backgroundColor: lb.headerBg || '#064e3b',
-              border: `1px solid ${lb.borderColor || '#10b981'}`,
-              boxShadow: lb.borderGlow ? `0 0 20px ${lb.borderColor || '#10b981'}40` : 'none'
+              background: 'linear-gradient(90deg, rgba(10,8,4,0.98), rgba(20,15,5,0.95))',
+              borderLeft: '3px solid #c9a84c',
             }}
-            onMouseDown={(e) => startDrag(e, 'leaderboard')}
           >
-            <span
-              className="font-black text-xs uppercase tracking-widest"
-              style={{ color: lb.textPrimary || '#ffffff' }}
-            >
-              🏆 Leaderboard
+            <span style={{
+              fontSize: 9, letterSpacing: '3px', textTransform: 'uppercase',
+              color: '#c9a84c', fontWeight: 700, fontFamily: "'Barlow Condensed', sans-serif"
+            }}>
+              {mode === 'overall' ? 'Overall Points' : 'Match Points'}
             </span>
-            <span
-              className="text-[10px] uppercase"
-              style={{ color: lb.textSecondary || '#6b7280' }}
-            >
-              {mode === 'match' ? 'Match Points' : 'Overall Points'}
+            <span style={{
+              fontSize: 9, letterSpacing: '2px',
+              color: 'rgba(200,170,80,0.5)', fontWeight: 600,
+              fontFamily: "'Barlow Condensed', sans-serif"
+            }}>
+              {teams.length} Teams
             </span>
           </div>
 
-          {/* Table */}
+          {/* Gold header / drag handle */}
           <div
-            className="border-x overflow-y-auto"
+            className="grid items-center px-2 py-[7px] cursor-grab active:cursor-grabbing"
             style={{
-              height: leaderboardSize.height - 70,
-              backgroundColor: lb.panelBg || '#0a0a0c',
-              borderColor: lb.borderColor || '#10b981',
-              opacity: (lb.opacity || 95) / 100
+              gridTemplateColumns: '42px 1fr 44px 54px',
+              background: 'linear-gradient(90deg, #b8974a 0%, #e8c96a 40%, #c9a84c 100%)',
+              clipPath: 'polygon(0 0, 100% 0, 100% 100%, 8px 100%)',
+            }}
+            onMouseDown={(e) => startDrag(e, 'leaderboard')}
+          >
+            {['RANK', 'TEAM', 'ELIMS', 'ALIVE'].map((h, i) => (
+              <span
+                key={h}
+                className={i <= 1 ? 'text-left' : 'text-center'}
+                style={{
+                  fontSize: 9, fontWeight: 800, letterSpacing: '2.5px',
+                  textTransform: 'uppercase', color: 'rgba(20,10,0,0.75)',
+                  fontFamily: "'Barlow Condensed', sans-serif"
+                }}
+              >
+                {h}
+              </span>
+            ))}
+          </div>
+
+          {/* Team rows */}
+          <div
+            className="flex flex-col gap-[1px] mt-[1px]"
+            style={{
+              maxHeight: leaderboardSize.height - 80,
+              overflowY: 'auto',
             }}
           >
-            <table className="w-full">
-              <thead className="sticky top-0">
-                <tr style={{ backgroundColor: lb.headerBg || '#064e3b' }}>
-                  <th className="text-left px-2 py-1.5 text-[10px] uppercase"
-                    style={{ color: lb.textSecondary || '#6b7280' }}>#</th>
-                  <th className="text-left px-2 py-1.5 text-[10px] uppercase"
-                    style={{ color: lb.textSecondary || '#6b7280' }}>Team</th>
-                  <th className="px-2 py-1.5 text-[10px] uppercase"
-                    style={{ color: lb.textSecondary || '#6b7280' }}> Kill(s)</th>
-                  <th className="px-2 py-1.5 text-[10px] uppercase font-bold"
-                    style={{ color: lb.pointsColor || '#fbbf24' }}>PTS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teamsWithPoints.map((team, index) => (
-                  <tr
-                    key={team.id}
-                    className="border-b"
-                    style={{ borderColor: (lb.borderColor || '#10b981') + '20' }}
-                  >
-                    <td className="px-2 py-1.5 font-black"
-                      style={{
-                        color: lb.rankColor || '#fbbf24',
-                        fontSize: `${lb.fontSize || 12}px`
+            {teamsWithPoints.map((team, index) => {
+              const rank = index + 1
+              const isElim = !team.players?.some(p => p.alive)
+              const alivePlayers = team.players?.filter(p => p.alive).length ?? 0
+              const totalPlayers = team.players?.length ?? 4
+
+              return (
+                <div
+                  key={team.id}
+                  className="grid items-center relative overflow-hidden"
+                  style={{
+                    gridTemplateColumns: '42px 1fr 44px 54px',
+                    background: getRowBg(rank, isElim),
+                    borderLeft: `3px solid ${getLeftBar(rank, isElim)}`,
+                    padding: '6px 10px 6px 0',
+                    opacity: isElim ? 0.65 : 1,
+                  }}
+                >
+                  {/* Top shine line */}
+                  <div
+                    className="absolute top-0 right-0 left-[42px] h-px"
+                    style={{ background: 'rgba(255,255,255,0.04)' }}
+                  />
+
+                  {/* Rank / team separator */}
+                  <div
+                    className="absolute top-[20%] bottom-[20%]"
+                    style={{ left: 42, width: 1, background: 'rgba(255,255,255,0.07)' }}
+                  />
+
+                  {/* Rank number */}
+                  <div className="flex flex-col items-center justify-center gap-[1px] px-1">
+                    <span style={{
+                      fontSize: rank <= 3 ? 16 : 13,
+                      fontWeight: 800,
+                      color: getRankColor(rank),
+                      lineHeight: 1,
+                      fontFamily: "'Barlow Condensed', sans-serif"
+                    }}>
+                      {rank}
+                    </span>
+                    <span style={{
+                      fontSize: 7, fontWeight: 700, letterSpacing: 1,
+                      color: getRankColor(rank), opacity: 0.7, lineHeight: 1,
+                      fontFamily: "'Barlow Condensed', sans-serif"
+                    }}>
+                      {SUPS[rank]}
+                    </span>
+                  </div>
+
+                  {/* Team name + health bars */}
+                  <div className="px-2">
+                    <p style={{
+                      fontSize: 14, fontWeight: 800, letterSpacing: '1.5px',
+                      textTransform: 'uppercase',
+                      color: isElim ? 'rgba(240,236,224,0.35)' : '#f0ece0',
+                      lineHeight: 1, marginBottom: 4,
+                      fontFamily: "'Barlow Condensed', sans-serif",
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                    }}>
+                      {team.name}
+                    </p>
+                    <div className="flex gap-[2px]">
+                      {team.players?.map((p, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            flex: 1, height: 3, borderRadius: 1,
+                            background: p.alive ? getBarAlive(rank) : 'rgba(255,255,255,0.08)'
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Kill count */}
+                  <div className="text-center">
+                    <span style={{
+                      fontSize: 17, fontWeight: 800,
+                      color: getKillsColor(rank, isElim),
+                      lineHeight: 1,
+                      fontFamily: "'Barlow Condensed', sans-serif"
+                    }}>
+                      {team.total_kills}
+                    </span>
+                  </div>
+
+                  {/* Alive pips */}
+                  <div className="flex items-center justify-center pr-1">
+                    {isElim ? (
+                      <span style={{
+                        fontSize: 8, fontWeight: 800, letterSpacing: '2px',
+                        color: '#ff4444',
+                        border: '1px solid rgba(255,60,60,0.3)',
+                        padding: '1px 5px',
+                        background: 'rgba(255,0,0,0.07)',
+                        fontFamily: "'Barlow Condensed', sans-serif"
                       }}>
-                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span
-                        className="font-bold"
-                        style={{
-                          color: lb.textPrimary || '#ffffff',
-                          fontSize: `${lb.fontSize || 12}px`
-                        }}
-                      >
-                        {team.name}
+                        ELIM
                       </span>
-                      <div className="flex gap-0.5 mt-1">
-                        {team.players?.map(p => (
+                    ) : (
+                      <div className="flex items-center gap-[3px]">
+                        {Array.from({ length: totalPlayers }, (_, i) => (
                           <div
-                            key={p.id}
-                            className="flex-1 rounded-sm"
+                            key={i}
                             style={{
-                              height: `${lb.barHeight || 6}px`,
-                              backgroundColor: p.alive
-                                ? lb.barAlive || '#10b981'
-                                : lb.barDead || '#374151'
+                              width: 6, height: 6, borderRadius: '50%',
+                              background: i < alivePlayers
+                                ? getRankColor(rank) === 'rgba(180,190,210,0.5)' ? '#e8c96a' : getRankColor(rank)
+                                : 'rgba(255,255,255,0.1)'
                             }}
                           />
                         ))}
                       </div>
-                    </td>
-                    <td className="px-2 py-1.5 text-center">
-                      <span
-                        className="font-bold"
-                        style={{
-                          color: lb.killsColor || '#60a5fa',
-                          fontSize: `${lb.fontSize || 12}px`
-                        }}
-                      >
-                        {team.total_kills}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5 text-center">
-                      <span
-                        className="font-black"
-                        style={{
-                          color: lb.pointsColor || '#fbbf24',
-                          fontSize: `${lb.fontSize || 12}px`
-                        }}
-                      >
-                        {mode === 'overall' ? team.overallTotal : team.matchTotal}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
-          {/* Resize Handle */}
+          {/* Footer live label */}
           <div
-            className="rounded-b-xl h-5 cursor-se-resize flex items-center justify-center border"
+            className="flex items-center gap-2 px-3 py-1"
             style={{
-              backgroundColor: lb.headerBg || '#064e3b',
-              borderColor: lb.borderColor || '#10b981'
+              background: 'linear-gradient(90deg, rgba(184,151,74,0.15), transparent)',
+              borderTop: '1px solid rgba(184,151,74,0.2)',
+            }}
+          >
+            <div
+              className="w-[5px] h-[5px] rounded-full animate-pulse"
+              style={{ background: '#c9a84c' }}
+            />
+            <span style={{
+              fontSize: 8, letterSpacing: '2px', textTransform: 'uppercase',
+              color: 'rgba(200,168,76,0.6)', fontWeight: 700,
+              fontFamily: "'Barlow Condensed', sans-serif"
+            }}>
+              Live — {currentMatch?.name || 'Match'}
+            </span>
+          </div>
+
+          {/* Resize handle */}
+          <div
+            className="h-4 flex items-center justify-center cursor-se-resize"
+            style={{
+              background: 'rgba(184,151,74,0.06)',
+              borderTop: '1px solid rgba(184,151,74,0.15)'
             }}
             onMouseDown={(e) => { resizing.current = true; e.preventDefault() }}
           >
             <div
-              className="w-4 h-0.5 rounded"
-              style={{ backgroundColor: lb.borderColor || '#10b981' }}
+              className="w-6 h-[2px] rounded"
+              style={{ background: 'rgba(200,168,76,0.25)' }}
             />
           </div>
         </div>
       )}
 
-      {/* FINAL 4 PANEL */}
+      {/* ═══════════════════════════════════════════════════════
+          FINAL 4 PANEL — unchanged from your original
+      ═══════════════════════════════════════════════════════ */}
       {showFinal4 && overlayState === 'final4' && (
         <div
           className="absolute select-none"
@@ -505,13 +633,14 @@ function MainOverlayContent() {
           </div>
         </div>
       )}
+
     </main>
   )
 }
 
 export default function MainOverlay() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-transparent"/>}>
+    <Suspense fallback={<div className="min-h-screen bg-transparent" />}>
       <MainOverlayContent />
     </Suspense>
   )
