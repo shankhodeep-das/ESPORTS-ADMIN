@@ -518,7 +518,7 @@ function MainOverlayContent() {
             />
             <span style={{
               fontSize: 8, letterSpacing: '2px', textTransform: 'uppercase',
-              color: 'rgba(200,168,76,0.6)', fontWeight: 700,
+              color: 'rgba(255, 1, 1, 0.96)', fontWeight: 700,
               fontFamily: "'Barlow Condensed', sans-serif"
             }}>
               Live — {currentMatch?.name || 'Match'}
