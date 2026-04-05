@@ -168,18 +168,21 @@ function MainOverlayContent() {
     }
   }
 
+  // FIX: use ?? 0 instead of || team.total_kills so 0-point teams don't fallback to kills
   const teamsWithPoints = teams.map(team => {
     const mp = matchPoints.find(p => p.team_id === team.id)
     const op = overallPoints.find(p => p.team_name === team.name)
     return {
       ...team,
-      matchTotal: mp?.total_points || team.total_kills,
-      overallTotal: op?.total || 0
+      matchTotal: mp?.total_points ?? 0,
+      overallTotal: op?.total ?? 0
     }
   }).sort((a, b) => {
     const mode = settings?.leaderboard_mode || 'match'
     if (mode === 'overall') return b.overallTotal - a.overallTotal
-    return b.matchTotal - a.matchTotal
+    // tie-break by kills
+    if (b.matchTotal !== a.matchTotal) return b.matchTotal - a.matchTotal
+    return b.total_kills - a.total_kills
   })
 
   const aliveTeams = teams.filter(t => t.players?.some(p => p.alive))
@@ -274,13 +277,6 @@ function MainOverlayContent() {
     return 'rgba(180,190,210,0.5)'
   }
 
-  function getBarAlive(rank) {
-    if (rank === 1) return '#FFD700'
-    if (rank === 2) return '#C0C0C0'
-    if (rank === 3) return '#E8A060'
-    return '#e8c96a'
-  }
-
   function getKillsColor(rank, isElim) {
     if (rank === 1) return '#FFD700'
     if (rank === 2) return '#D4D4D4'
@@ -314,9 +310,7 @@ function MainOverlayContent() {
       onMouseLeave={stopDrag}
     >
 
-      {/* ═══════════════════════════════════════════════════════
-          LEADERBOARD PANEL — CINEMATIC GOLD STYLE
-      ═══════════════════════════════════════════════════════ */}
+      {/* LEADERBOARD PANEL */}
       {showLeaderboard && overlayState === 'leaderboard' && (
         <div
           className="absolute select-none"
@@ -326,7 +320,6 @@ function MainOverlayContent() {
             width: leaderboardSize.width,
           }}
         >
-
           {/* Match label bar */}
           <div
             className="flex items-center justify-between px-3 py-1"
@@ -433,29 +426,18 @@ function MainOverlayContent() {
                     </span>
                   </div>
 
-                  {/* Team name + health bars */}
-                  <div className="px-2">
+                  {/* Team name — NO health bars */}
+                  <div className="px-2 flex items-center">
                     <p style={{
                       fontSize: 14, fontWeight: 800, letterSpacing: '1.5px',
                       textTransform: 'uppercase',
                       color: isElim ? 'rgba(240,236,224,0.35)' : '#f0ece0',
-                      lineHeight: 1, marginBottom: 4,
+                      lineHeight: 1,
                       fontFamily: "'Barlow Condensed', sans-serif",
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                     }}>
                       {team.name}
                     </p>
-                    <div className="flex gap-[2px]">
-                      {team.players?.map((p, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            flex: 1, height: 3, borderRadius: 1,
-                            background: p.alive ? getBarAlive(rank) : 'rgba(255,255,255,0.08)'
-                          }}
-                        />
-                      ))}
-                    </div>
                   </div>
 
                   {/* Kill count */}
@@ -542,9 +524,7 @@ function MainOverlayContent() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════
-          FINAL 4 PANEL — unchanged from your original
-      ═══════════════════════════════════════════════════════ */}
+      {/* FINAL 4 PANEL — unchanged */}
       {showFinal4 && overlayState === 'final4' && (
         <div
           className="absolute select-none"
