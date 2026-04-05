@@ -10,6 +10,7 @@ export default function CreateTournament() {
   const [name, setName] = useState('')
   const [game, setGame] = useState('BGMI')
   const [customGame, setCustomGame] = useState(null)
+  const [totalMatches, setTotalMatches] = useState(4)
   const [loading, setLoading] = useState(false)
 
   const finalGame = customGame || game
@@ -24,7 +25,8 @@ export default function CreateTournament() {
       .insert([{
         name,
         game: finalGame,
-        status: 'active'
+        status: 'active',
+        total_matches: totalMatches
       }])
 
     if (error) {
@@ -53,7 +55,7 @@ export default function CreateTournament() {
               New Tournament
             </h1>
             <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
-              Create Tournament
+              Initialize Operation
             </p>
           </div>
         </header>
@@ -120,6 +122,40 @@ export default function CreateTournament() {
                            transition-all duration-300"
               />
             )}
+          </div>
+
+          {/* Total Matches */}
+          <div className="flex flex-col gap-3">
+            <label className="text-xs font-bold tracking-widest text-slate-400 uppercase ml-1">
+              Total Matches
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {[3, 4, 6, 8, 10, 12].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setTotalMatches(n)}
+                  className={`px-5 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${
+                    totalMatches === n
+                      ? 'bg-[#10b981] text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                      : 'bg-white/5 border border-white/10 text-slate-400 hover:border-[#10b981]/50'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={totalMatches}
+              onChange={(e) => setTotalMatches(parseInt(e.target.value) || 1)}
+              className="w-full px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm
+                         placeholder:text-slate-600 focus:outline-none focus:border-[#10b981]
+                         transition-all duration-300"
+              placeholder="Or type custom number..."
+            />
           </div>
 
           {/* Buttons */}
