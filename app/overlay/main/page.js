@@ -514,11 +514,11 @@ function MainOverlayContent() {
           >
             <div
               className="w-[5px] h-[5px] rounded-full animate-pulse"
-              style={{ background: '#c9a84c' }}
+              style={{ background: '#f70707' }}
             />
             <span style={{
               fontSize: 8, letterSpacing: '2px', textTransform: 'uppercase',
-              color: 'rgba(255, 1, 1, 0.96)', fontWeight: 700,
+              color: 'rgba(241, 49, 49, 0.96)', fontWeight: 700,
               fontFamily: "'Barlow Condensed', sans-serif"
             }}>
               Live — {currentMatch?.name || 'Match'}
