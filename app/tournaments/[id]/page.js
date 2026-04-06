@@ -1,532 +1,662 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, Suspense } from 'react'
 import { supabase } from '@/app/lib/supabase'
-import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
-export default function TournamentPage() {
-  const { id } = useParams()
-  const router = useRouter()
-  const [tournament, setTournament] = useState(null)
-  const [matches, setMatches] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [creatingMatch, setCreatingMatch] = useState(false)
-  const [time, setTime] = useState('')
+const PLACEMENT_POINTS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+
+function MainOverlayContent() {
+  const searchParams = useSearchParams()
+  const matchId = searchParams.get('match')
+
+  const [teams, setTeams] = useState([])
+  const [overlayState, setOverlayState] = useState('leaderboard')
+  const [winner, setWinner] = useState(null)
+  const [settings, setSettings] = useState(null)
+  const [matchPoints, setMatchPoints] = useState([])
+  const [overallPoints, setOverallPoints] = useState([])
+  const [theme, setTheme] = useState(null)
+  const [final4Visible, setFinal4Visible] = useState(false)
+  const booyahDeclared = useRef(false)
+
+  const [leaderboardPos, setLeaderboardPos] = useState({ x: 20, y: 20 })
+  const [leaderboardSize, setLeaderboardSize] = useState({ width: 420, height: 600 })
+
+  const dragging = useRef(null)
+  const resizing = useRef(false)
+  const dragOffset = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
-    fetchTournament()
-    fetchMatches()
-    const timer = setInterval(() => {
-      const now = new Date()
-      setTime(now.toLocaleTimeString('en-US', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit'
-      }))
-    }, 1000)
-    return () => clearInterval(timer)
+    fetchAll()
+
+    const channel = supabase
+      .channel('main-overlay-v4')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'themes' }, () => {
+        if (matchId) fetchTheme(matchId)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
+        if (payload.new.status === 'finished') checkWinner(payload.new.id)
+        else if (payload.new.status === 'live') {
+          booyahDeclared.current = false
+          setFinal4Visible(false)
+          fetchAll()
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_points' }, () => fetchAll())
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }, [])
 
-  async function fetchTournament() {
+  async function fetchAll() {
+    if (booyahDeclared.current) return
+    await fetchSettings()
+    await fetchTeams()
+    await fetchPoints()
+  }
+
+  async function fetchSettings() {
+    if (!matchId) return
     const { data } = await supabase
-      .from('tournaments')
+      .from('overlay_settings')
       .select('*')
-      .eq('id', id)
+      .eq('match_id', matchId)
       .single()
-    setTournament(data)
+    if (data) {
+      setSettings(data)
+      setLeaderboardPos({ x: data.leaderboard_x || 20, y: data.leaderboard_y || 20 })
+      setLeaderboardSize({ width: data.leaderboard_width || 420, height: data.leaderboard_height || 600 })
+    }
   }
 
-  async function fetchMatches() {
+  async function fetchTheme(mId) {
     const { data } = await supabase
-      .from('matches')
-      .select('*, teams(*)')
-      .eq('tournament_id', id)
-      .order('match_number')
-    setMatches(data || [])
-    setLoading(false)
+      .from('themes')
+      .select('*')
+      .eq('match_id', mId)
+      .single()
+    if (data) setTheme(data)
   }
 
-  async function createMatch() {
-    if (creatingMatch) return
-    setCreatingMatch(true)
-
-    const matchNumber = matches.length + 1
-    const totalMatches = tournament?.total_matches || 4
-
-    if (matchNumber > totalMatches) {
-      alert('All matches have been created for this tournament!')
-      setCreatingMatch(false)
-      return
+  async function fetchTeams() {
+    let liveMatchId = matchId
+    if (!liveMatchId) {
+      const { data: liveMatch } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('status', 'live')
+        .limit(1)
+        .single()
+      if (!liveMatch) { setTeams([]); return }
+      liveMatchId = liveMatch.id
     }
 
-    const { error } = await supabase
-      .from('matches')
-      .insert([{
-        title: tournament?.name,
-        game: tournament?.game,
-        map: '',
-        round: `Match ${matchNumber}`,
-        status: 'waiting',
-        tournament_id: id,
-        match_number: matchNumber
-      }])
+    fetchTheme(liveMatchId)
 
-    if (error) {
-      alert('Error: ' + error.message)
-      setCreatingMatch(false)
-      return
+    const { data } = await supabase
+      .from('teams')
+      .select('*, players(*)')
+      .eq('match_id', liveMatchId)
+      .order('total_kills', { ascending: false })
+
+    if (!data) { setTeams([]); return }
+    setTeams(data)
+
+    const aliveTeams = data.filter(t => t.players?.some(p => p.alive))
+    if (aliveTeams.length <= 4 && aliveTeams.length > 0) {
+      if (overlayState !== 'final4') {
+        setOverlayState('final4')
+        setTimeout(() => setFinal4Visible(true), 100)
+      }
+    } else {
+      setOverlayState('leaderboard')
+      setFinal4Visible(false)
     }
-
-    await fetchMatches()
-    setCreatingMatch(false)
   }
 
-  async function deleteMatch(matchId) {
-    if (!confirm('Delete this match?')) return
-    await supabase.from('matches').delete().eq('id', matchId)
-    fetchMatches()
+  async function fetchPoints() {
+    if (!matchId) return
+    const { data: mp } = await supabase
+      .from('match_points')
+      .select('*')
+      .eq('match_id', matchId)
+    setMatchPoints(mp || [])
+
+    const { data: matchData } = await supabase
+      .from('matches')
+      .select('tournament_id')
+      .eq('id', matchId)
+      .single()
+
+    if (matchData?.tournament_id) {
+      const { data: op } = await supabase
+        .from('match_points')
+        .select('*')
+        .eq('tournament_id', matchData.tournament_id)
+      if (op) {
+        const teamMap = {}
+        op.forEach(p => {
+          if (!teamMap[p.team_name]) teamMap[p.team_name] = { team_name: p.team_name, total: 0 }
+          teamMap[p.team_name].total += p.total_points
+        })
+        setOverallPoints(Object.values(teamMap).sort((a, b) => b.total - a.total))
+      }
+    }
   }
 
-  const totalMatches = tournament?.total_matches || 4
-  const completedMatches = matches.filter(m => m.status === 'finished').length
-  const liveMatch = matches.find(m => m.status === 'live')
-  const progressPercent = Math.round((completedMatches / totalMatches) * 100)
-  const canCreateMore = matches.length < totalMatches
-  const tournamentComplete = completedMatches === totalMatches
-
-  function getMatchStatusStyle(status) {
-    if (status === 'live') return { bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.4)', color: '#ef4444' }
-    if (status === 'finished') return { bg: 'rgba(100,100,100,0.1)', border: 'rgba(100,100,100,0.3)', color: '#666' }
-    return { bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.3)', color: '#fbbf24' }
+  async function checkWinner(mId) {
+    const { data: winnerTeam } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('match_id', mId)
+      .eq('placement', 1)
+      .single()
+    if (winnerTeam) {
+      booyahDeclared.current = true
+      setWinner(winnerTeam)
+      setOverlayState('booyah')
+    }
   }
 
-  if (loading) return (
-    <main style={{ minHeight: '100vh', background: '#050a0e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontFamily: 'monospace', color: '#00ffa9', letterSpacing: '4px', fontSize: '13px' }}>
-        LOADING OPERATION...
-      </div>
-    </main>
-  )
+  const teamsWithPoints = teams.map(team => {
+    const mp = matchPoints.find(p => p.team_id === team.id)
+    const op = overallPoints.find(p => p.team_name === team.name)
+    return {
+      ...team,
+      matchTotal: mp?.total_points || team.total_kills,
+      overallTotal: op?.total || 0
+    }
+  }).sort((a, b) => {
+    const mode = settings?.leaderboard_mode || 'match'
+    if (mode === 'overall') return b.overallTotal - a.overallTotal
+    return b.matchTotal - a.matchTotal
+  })
+
+  const aliveTeams = teams.filter(t => t.players?.some(p => p.alive))
+  const mode = settings?.leaderboard_mode || 'match'
+  const showLeaderboard = settings?.show_leaderboard !== false
+  const showFinal4 = settings?.show_final4 !== false
+
+  const lb = theme?.leaderboard_theme || {}
+  const f4 = theme?.final4_theme || {}
+  const by = theme?.booyah_theme || {}
+
+  function startDrag(e, type) {
+    dragging.current = type
+    dragOffset.current = {
+      x: e.clientX - leaderboardPos.x,
+      y: e.clientY - leaderboardPos.y
+    }
+    e.preventDefault()
+  }
+
+  function onMouseMove(e) {
+    if (dragging.current === 'leaderboard') {
+      setLeaderboardPos({
+        x: e.clientX - dragOffset.current.x,
+        y: e.clientY - dragOffset.current.y
+      })
+    } else if (resizing.current) {
+      setLeaderboardSize({
+        width: Math.max(300, e.clientX - leaderboardPos.x),
+        height: Math.max(200, e.clientY - leaderboardPos.y)
+      })
+    }
+  }
+
+  function stopDrag() {
+    dragging.current = null
+    resizing.current = false
+  }
+
+  function glowSize(intensity) {
+    if (intensity === 'low') return '10px'
+    if (intensity === 'medium') return '20px'
+    if (intensity === 'high') return '60px'
+    return '0px'
+  }
+
+  // BOOYAH STATE
+  if (overlayState === 'booyah') {
+    return (
+      <>
+        <style>{`
+          @keyframes booyahSlideUp {
+            0% { transform: translateY(100px) scale(0.8); opacity: 0; }
+            60% { transform: translateY(-10px) scale(1.05); opacity: 1; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+          }
+          @keyframes booyahWinnerFade {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes diagonalMove {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+          @keyframes booyahPulse {
+            0%, 100% { text-shadow: 0 0 ${glowSize(by.glowIntensity)} ${by.glowColor || '#10b981'}; }
+            50% { text-shadow: 0 0 80px ${by.glowColor || '#10b981'}, 0 0 120px ${by.glowColor || '#10b981'}; }
+          }
+        `}</style>
+        <main style={{
+          minHeight: '100vh',
+          backgroundColor: by.bg || '#000000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          position: 'relative'
+        }}>
+          {/* Diagonal stripe effects */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            overflow: 'hidden',
+            pointerEvents: 'none'
+          }}>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} style={{
+                position: 'absolute',
+                top: '-50%',
+                left: `${i * 20 - 10}%`,
+                width: '8%',
+                height: '200%',
+                background: `${by.accentColor || '#10b981'}08`,
+                transform: 'rotate(25deg)',
+                animation: `diagonalMove ${3 + i * 0.5}s linear infinite`,
+              }}/>
+            ))}
+          </div>
+
+          {/* Corner accents */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0,
+            width: '200px', height: '4px',
+            background: by.accentColor || '#10b981'
+          }}/>
+          <div style={{
+            position: 'absolute', top: 0, left: 0,
+            width: '4px', height: '200px',
+            background: by.accentColor || '#10b981'
+          }}/>
+          <div style={{
+            position: 'absolute', bottom: 0, right: 0,
+            width: '200px', height: '4px',
+            background: by.accentColor || '#10b981'
+          }}/>
+          <div style={{
+            position: 'absolute', bottom: 0, right: 0,
+            width: '4px', height: '200px',
+            background: by.accentColor || '#10b981'
+          }}/>
+
+          {/* Main Content */}
+          <div style={{ textAlign: 'center', zIndex: 10 }}>
+            <p style={{
+              color: by.killsColor || '#9ca3af',
+              fontWeight: 700,
+              fontSize: '18px',
+              letterSpacing: '8px',
+              textTransform: 'uppercase',
+              marginBottom: '16px',
+              fontFamily: 'monospace',
+              animation: 'booyahWinnerFade 0.8s ease forwards'
+            }}>
+              WINNER WINNER
+            </p>
+
+            <h1 style={{
+              color: by.booyahColor || '#10b981',
+              fontSize: 'clamp(80px, 12vw, 160px)',
+              fontWeight: 900,
+              lineHeight: 1,
+              margin: '0 0 24px',
+              letterSpacing: '-2px',
+              fontFamily: "'Rajdhani', 'Arial Black', sans-serif",
+              textTransform: 'uppercase',
+              animation: 'booyahSlideUp 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, booyahPulse 2s ease 1s infinite',
+              textShadow: `0 0 ${glowSize(by.glowIntensity)} ${by.glowColor || '#10b981'}`
+            }}>
+              BOOYAH!
+            </h1>
+
+            {/* Winner Card */}
+            <div style={{
+              display: 'inline-block',
+              background: `${by.accentColor || '#10b981'}15`,
+              border: `2px solid ${by.accentColor || '#10b981'}`,
+              borderRadius: '8px',
+              padding: '20px 48px',
+              animation: 'booyahWinnerFade 0.8s ease 0.5s both',
+            }}>
+              <div style={{
+                color: by.killsColor || '#9ca3af',
+                fontSize: '12px',
+                letterSpacing: '4px',
+                marginBottom: '8px',
+                fontFamily: 'monospace'
+              }}>
+                CHAMPION
+              </div>
+              <h2 style={{
+                color: by.winnerColor || '#ffffff',
+                fontSize: 'clamp(32px, 5vw, 56px)',
+                fontWeight: 900,
+                margin: 0,
+                letterSpacing: '4px',
+                fontFamily: "'Rajdhani', 'Arial Black', sans-serif",
+                textTransform: 'uppercase'
+              }}>
+                {winner?.name}
+              </h2>
+              <p style={{
+                color: by.killsColor || '#9ca3af',
+                fontSize: '18px',
+                marginTop: '8px',
+                fontFamily: 'monospace',
+                letterSpacing: '2px'
+              }}>
+                {winner?.total_kills} KILLS
+              </p>
+            </div>
+          </div>
+        </main>
+      </>
+    )
+  }
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      background: '#050a0e',
-      backgroundImage: 'linear-gradient(rgba(0,255,170,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,170,0.02) 1px, transparent 1px)',
-      backgroundSize: '32px 32px',
-      fontFamily: "'Rajdhani', 'Arial', sans-serif",
-      color: '#e2e8f0'
-    }}>
-
-      {/* TOP NAV */}
-      <nav style={{
-        background: '#080d12',
-        borderBottom: '1px solid #1e2d3d',
-        padding: '0 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: '52px',
-        position: 'sticky',
-        top: 0,
-        zIndex: 50
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              width: '6px', height: '6px',
-              background: '#00ffa9',
-              borderRadius: '50%',
-              animation: 'pulse 2s infinite'
-            }}/>
-            <span style={{ color: '#00ffa9', fontWeight: 700, fontSize: '15px', letterSpacing: '3px' }}>
-              NEXUS
-            </span>
-          </div>
-          <div style={{ height: '20px', width: '1px', background: '#1e2d3d' }}/>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {[
-              { label: 'OPS', href: '/dashboard' },
-              { label: 'TOURNAMENTS', href: '/tournaments', active: true },
-              { label: 'THEMES', href: '/themes' },
-            ].map(item => (
-              <Link key={item.label} href={item.href}>
-                <span style={{
-                  color: item.active ? '#00ffa9' : '#4a5568',
-                  fontSize: '12px',
-                  letterSpacing: '2px',
-                  padding: '6px 12px',
-                  fontWeight: item.active ? 700 : 600,
-                  borderBottom: item.active ? '2px solid #00ffa9' : 'none',
-                  background: item.active ? 'rgba(0,255,169,0.05)' : 'transparent',
-                  borderRadius: '2px',
-                  cursor: 'pointer'
-                }}>
-                  {item.label}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ color: '#00ffa9', fontFamily: 'monospace', fontSize: '13px', letterSpacing: '2px' }}>
-            {time}
-          </span>
-        </div>
-      </nav>
-
-      <div style={{ padding: '24px' }}>
-
-        {/* BREADCRUMB */}
-        <div style={{ marginBottom: '16px' }}>
-          <Link href="/tournaments">
-            <span style={{ color: '#4a5568', fontSize: '11px', letterSpacing: '2px', cursor: 'pointer', fontFamily: 'monospace' }}>
-              ← TOURNAMENTS
-            </span>
-          </Link>
-          <span style={{ color: '#1e2d3d', margin: '0 8px', fontFamily: 'monospace', fontSize: '11px' }}>/</span>
-          <span style={{ color: '#00ffa9', fontSize: '11px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-            {tournament?.name?.toUpperCase()}
-          </span>
-        </div>
-
-        {/* PAGE HEADER */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-          <div>
-            <div style={{ color: '#00ffa9', opacity: 0.6, fontSize: '11px', letterSpacing: '2px', fontFamily: 'monospace', marginBottom: '4px' }}>
-              // TOURNAMENT OPERATION
-            </div>
-            <h1 style={{ color: '#e2e8f0', fontSize: '28px', fontWeight: 700, letterSpacing: '3px', margin: 0 }}>
-              {tournament?.name?.toUpperCase()}
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '6px' }}>
-              <span style={{ color: '#4a5568', fontSize: '12px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-                {tournament?.game?.toUpperCase()}
-              </span>
-              <span style={{ color: '#1e2d3d' }}>|</span>
-              <span style={{ color: '#4a5568', fontSize: '12px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-                {totalMatches} MATCHES TOTAL
-              </span>
-              {liveMatch && (
-                <>
-                  <span style={{ color: '#1e2d3d' }}>|</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <div style={{ width: '6px', height: '6px', background: '#ef4444', borderRadius: '50%', animation: 'pulse 1s infinite' }}/>
-                    <span style={{ color: '#ef4444', fontSize: '11px', letterSpacing: '2px', fontFamily: 'monospace', fontWeight: 700 }}>
-                      MATCH {liveMatch.match_number} LIVE
-                    </span>
-                  </div>
-                </>
-              )}
-              {tournamentComplete && (
-                <>
-                  <span style={{ color: '#1e2d3d' }}>|</span>
-                  <span style={{ color: '#00ffa9', fontSize: '11px', letterSpacing: '2px', fontFamily: 'monospace', fontWeight: 700 }}>
-                    ✓ TOURNAMENT COMPLETE
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {matches.length > 0 && (
-              <Link href={`/tournaments/${id}/leaderboard`}>
-                <button style={{
-                  background: 'rgba(251,191,36,0.1)',
-                  border: '1px solid rgba(251,191,36,0.3)',
-                  color: '#fbbf24',
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  letterSpacing: '2px',
-                  padding: '10px 20px',
-                  cursor: 'pointer',
-                  borderRadius: '2px',
-                }}>
-                  OVERALL LB
-                </button>
-              </Link>
-            )}
-            {canCreateMore && (
-              <button
-                onClick={createMatch}
-                disabled={creatingMatch}
-                style={{
-                  background: '#00ffa9',
-                  border: 'none',
-                  color: '#050a0e',
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  letterSpacing: '2px',
-                  padding: '10px 24px',
-                  cursor: 'pointer',
-                  borderRadius: '2px',
-                  opacity: creatingMatch ? 0.5 : 1
-                }}
-              >
-                {creatingMatch ? 'CREATING...' : `+ MATCH ${matches.length + 1}`}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* PROGRESS SECTION */}
-        <div style={{
-          background: '#0d1117',
-          border: '1px solid #1e2d3d',
-          borderRadius: '4px',
-          padding: '20px',
-          marginBottom: '24px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ color: '#4a5568', fontSize: '11px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-              OPERATION PROGRESS
-            </span>
-            <span style={{ color: '#00ffa9', fontSize: '20px', fontWeight: 700, fontFamily: 'monospace', letterSpacing: '2px' }}>
-              {completedMatches}<span style={{ color: '#4a5568', fontSize: '13px' }}>/{totalMatches}</span>
-            </span>
-          </div>
-
-          {/* Progress Bar */}
-          <div style={{ height: '4px', background: '#1e2d3d', borderRadius: '0', marginBottom: '12px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${progressPercent}%`,
-              background: tournamentComplete ? '#00ffa9' : '#00ffa9',
-              transition: 'width 0.5s ease'
-            }}/>
-          </div>
-
-          {/* Match Dots */}
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {Array.from({ length: totalMatches }).map((_, i) => {
-              const match = matches[i]
-              let bg = '#1e2d3d'
-              let label = `M${i + 1}`
-              if (match?.status === 'finished') bg = '#00ffa9'
-              else if (match?.status === 'live') bg = '#ef4444'
-              else if (match?.status === 'waiting') bg = '#fbbf24'
-
-              return (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    background: bg,
-                    borderRadius: '2px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    color: bg === '#1e2d3d' ? '#4a5568' : '#050a0e',
-                    fontFamily: 'monospace',
-                    letterSpacing: '1px',
-                    animation: match?.status === 'live' ? 'pulse 1s infinite' : 'none'
-                  }}>
-                    {match?.status === 'finished' ? '✓' : label}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Legend */}
-          <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
-            {[
-              { color: '#00ffa9', label: 'FINISHED' },
-              { color: '#ef4444', label: 'LIVE' },
-              { color: '#fbbf24', label: 'WAITING' },
-              { color: '#1e2d3d', label: 'PENDING' },
-            ].map(item => (
-              <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '8px', height: '8px', background: item.color, borderRadius: '1px' }}/>
-                <span style={{ color: '#4a5568', fontSize: '10px', letterSpacing: '1px', fontFamily: 'monospace' }}>
-                  {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* MATCHES LIST */}
-        {matches.length === 0 ? (
-          <div style={{
-            background: '#0d1117',
-            border: '1px dashed #1e2d3d',
-            borderRadius: '4px',
-            padding: '40px',
-            textAlign: 'center'
-          }}>
-            <div style={{ color: '#4a5568', fontSize: '12px', letterSpacing: '3px', fontFamily: 'monospace' }}>
-              NO MATCHES INITIALIZED
-            </div>
-            <div style={{ color: '#2d3748', fontSize: '11px', letterSpacing: '2px', fontFamily: 'monospace', marginTop: '8px' }}>
-              CLICK + MATCH 1 TO BEGIN OPERATION
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              <span style={{ color: '#4a5568', fontSize: '11px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-                MATCH REGISTRY
-              </span>
-              <div style={{ flex: 1, height: '1px', background: '#1e2d3d' }}/>
-            </div>
-
-            {matches.map((match) => {
-              const statusStyle = getMatchStatusStyle(match.status)
-              const aliveTeams = match.teams?.filter(t => t.total_kills >= 0).length || 0
-
-              return (
-                <div
-                  key={match.id}
-                  style={{
-                    background: '#0d1117',
-                    border: match.status === 'live'
-                      ? '1px solid rgba(239,68,68,0.4)'
-                      : match.status === 'finished'
-                      ? '1px solid rgba(0,255,169,0.2)'
-                      : '1px solid #1e2d3d',
-                    borderRadius: '4px',
-                    padding: '0',
-                    overflow: 'hidden',
-                    transition: 'border-color 0.2s',
-                    opacity: match.status === 'finished' ? 0.7 : 1
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 20px' }}>
-
-                    {/* Left accent */}
-                    <div style={{
-                      width: '3px',
-                      height: '48px',
-                      background: match.status === 'live' ? '#ef4444' :
-                                  match.status === 'finished' ? '#00ffa9' :
-                                  '#fbbf24',
-                      borderRadius: '0',
-                      flexShrink: 0,
-                      animation: match.status === 'live' ? 'pulse 1s infinite' : 'none'
-                    }}/>
-
-                    {/* Match Number */}
-                    <div style={{ textAlign: 'center', minWidth: '48px' }}>
-                      <div style={{ color: '#4a5568', fontSize: '10px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-                        MATCH
-                      </div>
-                      <div style={{ color: '#e2e8f0', fontSize: '24px', fontWeight: 700, lineHeight: 1, fontFamily: 'monospace' }}>
-                        {match.match_number}
-                      </div>
-                    </div>
-
-                    {/* Divider */}
-                    <div style={{ width: '1px', height: '40px', background: '#1e2d3d' }}/>
-
-                    {/* Match Info */}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                        <span style={{ color: '#e2e8f0', fontSize: '16px', fontWeight: 700, letterSpacing: '2px' }}>
-                          {match.round?.toUpperCase() || `MATCH ${match.match_number}`}
-                        </span>
-                        <div style={{
-                          background: statusStyle.bg,
-                          border: `1px solid ${statusStyle.border}`,
-                          color: statusStyle.color,
-                          fontSize: '10px',
-                          padding: '2px 8px',
-                          borderRadius: '2px',
-                          letterSpacing: '2px',
-                          fontWeight: 700,
-                          fontFamily: 'monospace',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}>
-                          {match.status === 'live' && (
-                            <div style={{ width: '5px', height: '5px', background: '#ef4444', borderRadius: '50%', animation: 'pulse 1s infinite' }}/>
-                          )}
-                          {match.status.toUpperCase()}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '16px' }}>
-                        <span style={{ color: '#4a5568', fontSize: '11px', fontFamily: 'monospace', letterSpacing: '1px' }}>
-                          {match.map ? `MAP: ${match.map.toUpperCase()}` : 'MAP: NOT SET'}
-                        </span>
-                        <span style={{ color: '#1e2d3d' }}>|</span>
-                        <span style={{ color: '#4a5568', fontSize: '11px', fontFamily: 'monospace', letterSpacing: '1px' }}>
-                          TEAMS: {match.teams?.length || 0}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <Link href={`/match/${match.id}`}>
-                        <button style={{
-                          background: match.status === 'live' ? '#ef4444' : 'transparent',
-                          border: match.status === 'live' ? 'none' : '1px solid #00ffa9',
-                          color: match.status === 'live' ? '#fff' : '#00ffa9',
-                          fontFamily: "'Rajdhani', sans-serif",
-                          fontWeight: 700,
-                          fontSize: '12px',
-                          letterSpacing: '2px',
-                          padding: '8px 16px',
-                          cursor: 'pointer',
-                          borderRadius: '2px',
-                        }}>
-                          {match.status === 'live' ? '● MANAGE' : 'MANAGE ▶'}
-                        </button>
-                      </Link>
-                      <button
-                        onClick={() => deleteMatch(match.id)}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid #2d1e1e',
-                          color: '#ef4444',
-                          fontSize: '12px',
-                          padding: '8px 12px',
-                          cursor: 'pointer',
-                          borderRadius: '2px',
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* FOOTER */}
-        <div style={{
-          marginTop: '24px',
-          paddingTop: '16px',
-          borderTop: '1px solid #1e2d3d',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <span style={{ color: '#1e2d3d', fontSize: '10px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-            NEXUS COMMAND v2.0 · AUTHORIZED PERSONNEL ONLY
-          </span>
-          <span style={{ color: '#1e2d3d', fontSize: '10px', letterSpacing: '2px', fontFamily: 'monospace' }}>
-            SYSTEM NOMINAL
-          </span>
-        </div>
-
-      </div>
-
+    <>
       <style>{`
+        @keyframes slideDown {
+          0% { transform: translateY(-100%); opacity: 0; }
+          60% { transform: translateY(4px); opacity: 1; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes cardPop {
+          0% { transform: scale(0.8) translateY(-20px); opacity: 0; }
+          70% { transform: scale(1.05) translateY(0); opacity: 1; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
         }
+        @keyframes leaderPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+          50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+        }
       `}</style>
 
-    </main>
+      <main
+        className="min-h-screen bg-transparent overflow-hidden relative"
+        onMouseMove={onMouseMove}
+        onMouseUp={stopDrag}
+        onMouseLeave={stopDrag}
+      >
+
+        {/* FINAL 4 — TOP BAR */}
+        {showFinal4 && overlayState === 'final4' && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 100,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            animation: final4Visible ? 'slideDown 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' : 'none',
+            transform: final4Visible ? 'translateY(0)' : 'translateY(-100%)'
+          }}>
+
+            {/* Header Label */}
+            <div style={{
+              background: f4.bg || '#000000',
+              borderBottom: `2px solid ${f4.highlightColor || '#fbbf24'}`,
+              padding: '6px 32px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              width: '100%',
+              justifyContent: 'center'
+            }}>
+              <div style={{
+                width: '8px', height: '8px',
+                background: f4.highlightColor || '#fbbf24',
+                borderRadius: '50%',
+                animation: 'pulse 1s infinite'
+              }}/>
+              <span style={{
+                color: f4.highlightColor || '#fbbf24',
+                fontSize: '13px',
+                fontWeight: 800,
+                letterSpacing: '6px',
+                fontFamily: "'Rajdhani', monospace",
+                textTransform: 'uppercase'
+              }}>
+                FINAL {aliveTeams.length} TEAMS ALIVE
+              </span>
+              <div style={{
+                width: '8px', height: '8px',
+                background: f4.highlightColor || '#fbbf24',
+                borderRadius: '50%',
+                animation: 'pulse 1s infinite'
+              }}/>
+            </div>
+
+            {/* Team Cards Row */}
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              padding: '8px 16px',
+              background: `${f4.bg || '#000000'}ee`,
+              borderBottom: `1px solid ${(f4.borderColor || '#fbbf24')}40`,
+              width: '100%',
+              justifyContent: 'center'
+            }}>
+              {aliveTeams.map((team, index) => (
+                <div
+                  key={team.id}
+                  style={{
+                    background: f4.cardBg || '#1a1a00',
+                    border: `1px solid ${f4.borderColor || '#fbbf24'}`,
+                    borderTop: `3px solid ${
+                      index === 0 ? '#ffd700' :
+                      index === 1 ? '#c0c0c0' :
+                      index === 2 ? '#cd7f32' :
+                      f4.highlightColor || '#fbbf24'
+                    }`,
+                    borderRadius: '4px',
+                    padding: '8px 20px',
+                    minWidth: '140px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    animation: `cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s both`,
+                    boxShadow: index === 0 ? `0 0 20px rgba(255,215,0,0.3)` : 'none'
+                  }}
+                >
+                  {/* Rank */}
+                  <span style={{
+                    color: index === 0 ? '#ffd700' : index === 1 ? '#c0c0c0' : index === 2 ? '#cd7f32' : f4.highlightColor || '#fbbf24',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    letterSpacing: '3px',
+                    fontFamily: 'monospace'
+                  }}>
+                    #{index + 1}
+                  </span>
+
+                  {/* Team Name */}
+                  <span style={{
+                    color: f4.textColor || '#ffffff',
+                    fontSize: '18px',
+                    fontWeight: 800,
+                    letterSpacing: '2px',
+                    fontFamily: "'Rajdhani', sans-serif",
+                    textTransform: 'uppercase',
+                    lineHeight: 1
+                  }}>
+                    {team.name}
+                  </span>
+
+                  {/* Player Bars */}
+                  <div style={{ display: 'flex', gap: '3px', margin: '4px 0' }}>
+                    {team.players?.map(p => (
+                      <div key={p.id} style={{
+                        width: '20px',
+                        height: '4px',
+                        background: p.alive
+                          ? f4.barColor || '#fbbf24'
+                          : '#374151',
+                        borderRadius: '1px'
+                      }}/>
+                    ))}
+                  </div>
+
+                  {/* Kills */}
+                  <span style={{
+                    color: f4.highlightColor || '#fbbf24',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    letterSpacing: '1px'
+                  }}>
+                    {team.total_kills}K
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* LEADERBOARD PANEL */}
+        {showLeaderboard && overlayState === 'leaderboard' && (
+          <div
+            className="absolute select-none"
+            style={{
+              left: leaderboardPos.x,
+              top: leaderboardPos.y,
+              width: leaderboardSize.width,
+              height: leaderboardSize.height,
+            }}
+          >
+            {/* Header */}
+            <div
+              className="rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing flex justify-between items-center"
+              style={{
+                backgroundColor: lb.headerBg || '#064e3b',
+                border: `1px solid ${lb.borderColor || '#10b981'}`,
+                boxShadow: lb.borderGlow ? `0 0 20px ${lb.borderColor || '#10b981'}40` : 'none'
+              }}
+              onMouseDown={(e) => startDrag(e, 'leaderboard')}
+            >
+              <span className="font-black text-xs uppercase tracking-widest"
+                style={{ color: lb.textPrimary || '#ffffff' }}>
+                🏆 Leaderboard
+              </span>
+              <span className="text-[10px] uppercase"
+                style={{ color: lb.textSecondary || '#6b7280' }}>
+                {mode === 'match' ? 'Match Points' : 'Overall Points'}
+              </span>
+            </div>
+
+            {/* Table */}
+            <div
+              className="border-x overflow-y-auto"
+              style={{
+                height: leaderboardSize.height - 70,
+                backgroundColor: lb.panelBg || '#0a0a0c',
+                borderColor: lb.borderColor || '#10b981',
+                opacity: (lb.opacity || 95) / 100
+              }}
+            >
+              <table className="w-full">
+                <thead className="sticky top-0">
+                  <tr style={{ backgroundColor: lb.headerBg || '#064e3b' }}>
+                    <th className="text-left px-2 py-1.5 text-[10px] uppercase"
+                      style={{ color: lb.textSecondary || '#6b7280' }}>#</th>
+                    <th className="text-left px-2 py-1.5 text-[10px] uppercase"
+                      style={{ color: lb.textSecondary || '#6b7280' }}>Team</th>
+                    <th className="px-2 py-1.5 text-[10px] uppercase"
+                      style={{ color: lb.textSecondary || '#6b7280' }}>K</th>
+                    <th className="px-2 py-1.5 text-[10px] uppercase font-bold"
+                      style={{ color: lb.pointsColor || '#fbbf24' }}>PTS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamsWithPoints.map((team, index) => (
+                    <tr key={team.id} className="border-b"
+                      style={{ borderColor: (lb.borderColor || '#10b981') + '20' }}>
+                      <td className="px-2 py-1.5 font-black"
+                        style={{ color: lb.rankColor || '#fbbf24', fontSize: `${lb.fontSize || 12}px` }}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="font-bold"
+                          style={{ color: lb.textPrimary || '#ffffff', fontSize: `${lb.fontSize || 12}px` }}>
+                          {team.name}
+                        </span>
+                        <div className="flex gap-0.5 mt-1">
+                          {team.players?.map(p => (
+                            <div key={p.id} className="flex-1 rounded-sm"
+                              style={{
+                                height: `${lb.barHeight || 6}px`,
+                                backgroundColor: p.alive ? lb.barAlive || '#10b981' : lb.barDead || '#374151'
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <span className="font-bold"
+                          style={{ color: lb.killsColor || '#60a5fa', fontSize: `${lb.fontSize || 12}px` }}>
+                          {team.total_kills}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <span className="font-black"
+                          style={{ color: lb.pointsColor || '#fbbf24', fontSize: `${lb.fontSize || 12}px` }}>
+                          {mode === 'overall' ? team.overallTotal : team.matchTotal}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Resize Handle */}
+            <div
+              className="rounded-b-xl h-5 cursor-se-resize flex items-center justify-center border"
+              style={{
+                backgroundColor: lb.headerBg || '#064e3b',
+                borderColor: lb.borderColor || '#10b981'
+              }}
+              onMouseDown={(e) => { resizing.current = true; e.preventDefault() }}
+            >
+              <div className="w-4 h-0.5 rounded"
+                style={{ backgroundColor: lb.borderColor || '#10b981' }}/>
+            </div>
+          </div>
+        )}
+
+      </main>
+    </>
+  )
+}
+
+export default function MainOverlay() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-transparent"/>}>
+      <MainOverlayContent />
+    </Suspense>
   )
 }
