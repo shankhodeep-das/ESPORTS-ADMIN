@@ -16,13 +16,12 @@ function MainOverlayContent() {
   const [settings, setSettings] = useState(null)
   const [matchPoints, setMatchPoints] = useState([])
   const [overallPoints, setOverallPoints] = useState([])
-  const [currentMatch, setCurrentMatch] = useState(null)
   const [theme, setTheme] = useState(null)
+  const [final4Visible, setFinal4Visible] = useState(false)
   const booyahDeclared = useRef(false)
 
   const [leaderboardPos, setLeaderboardPos] = useState({ x: 20, y: 20 })
   const [leaderboardSize, setLeaderboardSize] = useState({ width: 420, height: 600 })
-  const [final4Pos, setFinal4Pos] = useState({ x: 600, y: 150 })
 
   const dragging = useRef(null)
   const resizing = useRef(false)
@@ -32,7 +31,7 @@ function MainOverlayContent() {
     fetchAll()
 
     const channel = supabase
-      .channel('main-overlay-v3')
+      .channel('main-overlay-v4')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'themes' }, () => {
@@ -40,7 +39,11 @@ function MainOverlayContent() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
         if (payload.new.status === 'finished') checkWinner(payload.new.id)
-        else if (payload.new.status === 'live') { booyahDeclared.current = false; fetchAll() }
+        else if (payload.new.status === 'live') {
+          booyahDeclared.current = false
+          setFinal4Visible(false)
+          fetchAll()
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_points' }, () => fetchAll())
@@ -63,12 +66,10 @@ function MainOverlayContent() {
       .select('*')
       .eq('match_id', matchId)
       .single()
-
     if (data) {
       setSettings(data)
       setLeaderboardPos({ x: data.leaderboard_x || 20, y: data.leaderboard_y || 20 })
       setLeaderboardSize({ width: data.leaderboard_width || 420, height: data.leaderboard_height || 600 })
-      setFinal4Pos({ x: data.final4_x || 600, y: data.final4_y || 150 })
     }
   }
 
@@ -83,7 +84,6 @@ function MainOverlayContent() {
 
   async function fetchTeams() {
     let liveMatchId = matchId
-
     if (!liveMatchId) {
       const { data: liveMatch } = await supabase
         .from('matches')
@@ -93,14 +93,6 @@ function MainOverlayContent() {
         .single()
       if (!liveMatch) { setTeams([]); return }
       liveMatchId = liveMatch.id
-      setCurrentMatch(liveMatch)
-    } else {
-      const { data: m } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', liveMatchId)
-        .single()
-      setCurrentMatch(m)
     }
 
     fetchTheme(liveMatchId)
@@ -116,9 +108,13 @@ function MainOverlayContent() {
 
     const aliveTeams = data.filter(t => t.players?.some(p => p.alive))
     if (aliveTeams.length <= 4 && aliveTeams.length > 0) {
-      setOverlayState('final4')
+      if (overlayState !== 'final4') {
+        setOverlayState('final4')
+        setTimeout(() => setFinal4Visible(true), 100)
+      }
     } else {
       setOverlayState('leaderboard')
+      setFinal4Visible(false)
     }
   }
 
@@ -141,7 +137,6 @@ function MainOverlayContent() {
         .from('match_points')
         .select('*')
         .eq('tournament_id', matchData.tournament_id)
-
       if (op) {
         const teamMap = {}
         op.forEach(p => {
@@ -160,7 +155,6 @@ function MainOverlayContent() {
       .eq('match_id', mId)
       .eq('placement', 1)
       .single()
-
     if (winnerTeam) {
       booyahDeclared.current = true
       setWinner(winnerTeam)
@@ -168,21 +162,18 @@ function MainOverlayContent() {
     }
   }
 
-  // FIX: use ?? 0 instead of || team.total_kills so 0-point teams don't fallback to kills
   const teamsWithPoints = teams.map(team => {
     const mp = matchPoints.find(p => p.team_id === team.id)
     const op = overallPoints.find(p => p.team_name === team.name)
     return {
       ...team,
-      matchTotal: mp?.total_points ?? 0,
-      overallTotal: op?.total ?? 0
+      matchTotal: mp?.total_points || team.total_kills,
+      overallTotal: op?.total || 0
     }
   }).sort((a, b) => {
     const mode = settings?.leaderboard_mode || 'match'
     if (mode === 'overall') return b.overallTotal - a.overallTotal
-    // tie-break by kills
-    if (b.matchTotal !== a.matchTotal) return b.matchTotal - a.matchTotal
-    return b.total_kills - a.total_kills
+    return b.matchTotal - a.matchTotal
   })
 
   const aliveTeams = teams.filter(t => t.players?.some(p => p.alive))
@@ -190,23 +181,25 @@ function MainOverlayContent() {
   const showLeaderboard = settings?.show_leaderboard !== false
   const showFinal4 = settings?.show_final4 !== false
 
+  const lb = theme?.leaderboard_theme || {}
   const f4 = theme?.final4_theme || {}
   const by = theme?.booyah_theme || {}
 
   function startDrag(e, type) {
     dragging.current = type
     dragOffset.current = {
-      x: e.clientX - (type === 'leaderboard' ? leaderboardPos.x : final4Pos.x),
-      y: e.clientY - (type === 'leaderboard' ? leaderboardPos.y : final4Pos.y)
+      x: e.clientX - leaderboardPos.x,
+      y: e.clientY - leaderboardPos.y
     }
     e.preventDefault()
   }
 
   function onMouseMove(e) {
     if (dragging.current === 'leaderboard') {
-      setLeaderboardPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
-    } else if (dragging.current === 'final4') {
-      setFinal4Pos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
+      setLeaderboardPos({
+        x: e.clientX - dragOffset.current.x,
+        y: e.clientY - dragOffset.current.y
+      })
     } else if (resizing.current) {
       setLeaderboardSize({
         width: Math.max(300, e.clientX - leaderboardPos.x),
@@ -223,404 +216,446 @@ function MainOverlayContent() {
   function glowSize(intensity) {
     if (intensity === 'low') return '10px'
     if (intensity === 'medium') return '20px'
-    if (intensity === 'high') return '40px'
+    if (intensity === 'high') return '60px'
     return '0px'
   }
 
-  // ─── BOOYAH SCREEN ───────────────────────────────────────────────────────────
+  // BOOYAH STATE
   if (overlayState === 'booyah') {
     return (
-      <main
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: by.bg || '#000000' }}
-      >
-        <div className="text-center">
-          <p
-            className="font-bold text-xl tracking-widest uppercase mb-4"
-            style={{ color: by.killsColor || '#9ca3af' }}
-          >
-            Winner Winner
-          </p>
-          <h1
-            className="text-8xl font-black mb-6"
-            style={{
+      <>
+        <style>{`
+          @keyframes booyahSlideUp {
+            0% { transform: translateY(100px) scale(0.8); opacity: 0; }
+            60% { transform: translateY(-10px) scale(1.05); opacity: 1; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+          }
+          @keyframes booyahWinnerFade {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes diagonalMove {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+          @keyframes booyahPulse {
+            0%, 100% { text-shadow: 0 0 ${glowSize(by.glowIntensity)} ${by.glowColor || '#10b981'}; }
+            50% { text-shadow: 0 0 80px ${by.glowColor || '#10b981'}, 0 0 120px ${by.glowColor || '#10b981'}; }
+          }
+        `}</style>
+        <main style={{
+          minHeight: '100vh',
+          backgroundColor: by.bg || '#000000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          position: 'relative'
+        }}>
+          {/* Diagonal stripe effects */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            overflow: 'hidden',
+            pointerEvents: 'none'
+          }}>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} style={{
+                position: 'absolute',
+                top: '-50%',
+                left: `${i * 20 - 10}%`,
+                width: '8%',
+                height: '200%',
+                background: `${by.accentColor || '#10b981'}08`,
+                transform: 'rotate(25deg)',
+                animation: `diagonalMove ${3 + i * 0.5}s linear infinite`,
+              }}/>
+            ))}
+          </div>
+
+          {/* Corner accents */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0,
+            width: '200px', height: '4px',
+            background: by.accentColor || '#10b981'
+          }}/>
+          <div style={{
+            position: 'absolute', top: 0, left: 0,
+            width: '4px', height: '200px',
+            background: by.accentColor || '#10b981'
+          }}/>
+          <div style={{
+            position: 'absolute', bottom: 0, right: 0,
+            width: '200px', height: '4px',
+            background: by.accentColor || '#10b981'
+          }}/>
+          <div style={{
+            position: 'absolute', bottom: 0, right: 0,
+            width: '4px', height: '200px',
+            background: by.accentColor || '#10b981'
+          }}/>
+
+          {/* Main Content */}
+          <div style={{ textAlign: 'center', zIndex: 10 }}>
+            <p style={{
+              color: by.killsColor || '#9ca3af',
+              fontWeight: 700,
+              fontSize: '18px',
+              letterSpacing: '8px',
+              textTransform: 'uppercase',
+              marginBottom: '16px',
+              fontFamily: 'monospace',
+              animation: 'booyahWinnerFade 0.8s ease forwards'
+            }}>
+              WINNER WINNER
+            </p>
+
+            <h1 style={{
               color: by.booyahColor || '#10b981',
+              fontSize: 'clamp(80px, 12vw, 160px)',
+              fontWeight: 900,
+              lineHeight: 1,
+              margin: '0 0 24px',
+              letterSpacing: '-2px',
+              fontFamily: "'Rajdhani', 'Arial Black', sans-serif",
+              textTransform: 'uppercase',
+              animation: 'booyahSlideUp 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, booyahPulse 2s ease 1s infinite',
               textShadow: `0 0 ${glowSize(by.glowIntensity)} ${by.glowColor || '#10b981'}`
-            }}
-          >
-            BOOYAH!
-          </h1>
-          <h2
-            className="text-5xl font-black mb-4"
-            style={{ color: by.winnerColor || '#ffffff' }}
-          >
-            {winner?.name}
-          </h2>
-          <p
-            className="text-2xl"
-            style={{ color: by.killsColor || '#9ca3af' }}
-          >
-            🎯 {winner?.total_kills} Kills
-          </p>
-        </div>
-      </main>
+            }}>
+              BOOYAH!
+            </h1>
+
+            {/* Winner Card */}
+            <div style={{
+              display: 'inline-block',
+              background: `${by.accentColor || '#10b981'}15`,
+              border: `2px solid ${by.accentColor || '#10b981'}`,
+              borderRadius: '8px',
+              padding: '20px 48px',
+              animation: 'booyahWinnerFade 0.8s ease 0.5s both',
+            }}>
+              <div style={{
+                color: by.killsColor || '#9ca3af',
+                fontSize: '12px',
+                letterSpacing: '4px',
+                marginBottom: '8px',
+                fontFamily: 'monospace'
+              }}>
+                CHAMPION
+              </div>
+              <h2 style={{
+                color: by.winnerColor || '#ffffff',
+                fontSize: 'clamp(32px, 5vw, 56px)',
+                fontWeight: 900,
+                margin: 0,
+                letterSpacing: '4px',
+                fontFamily: "'Rajdhani', 'Arial Black', sans-serif",
+                textTransform: 'uppercase'
+              }}>
+                {winner?.name}
+              </h2>
+              <p style={{
+                color: by.killsColor || '#9ca3af',
+                fontSize: '18px',
+                marginTop: '8px',
+                fontFamily: 'monospace',
+                letterSpacing: '2px'
+              }}>
+                {winner?.total_kills} KILLS
+              </p>
+            </div>
+          </div>
+        </main>
+      </>
     )
   }
 
-  // ─── RANK HELPERS ─────────────────────────────────────────────────────────────
-  const SUPS = ['', 'ST', 'ND', 'RD', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH']
-
-  function getRankColor(rank) {
-    if (rank === 1) return '#FFD700'
-    if (rank === 2) return '#D4D4D4'
-    if (rank === 3) return '#cd7f32'
-    return 'rgba(180,190,210,0.5)'
-  }
-
-  function getKillsColor(rank, isElim) {
-    if (rank === 1) return '#FFD700'
-    if (rank === 2) return '#D4D4D4'
-    if (rank === 3) return '#cd7f32'
-    if (isElim) return 'rgba(240,236,224,0.3)'
-    return '#f0ece0'
-  }
-
-  function getLeftBar(rank, isElim) {
-    if (rank === 1) return '#FFD700'
-    if (rank === 2) return '#C0C0C0'
-    if (rank === 3) return '#cd7f32'
-    if (isElim) return 'rgba(255,60,60,0.4)'
-    return 'rgba(200,168,76,0.15)'
-  }
-
-  function getRowBg(rank, isElim) {
-    if (rank === 1) return 'linear-gradient(90deg, rgba(30,22,0,0.97) 0%, rgba(10,8,4,0.93) 100%)'
-    if (rank === 2) return 'linear-gradient(90deg, rgba(20,20,22,0.97) 0%, rgba(8,8,12,0.93) 100%)'
-    if (rank === 3) return 'linear-gradient(90deg, rgba(22,14,4,0.97) 0%, rgba(8,8,12,0.93) 100%)'
-    if (isElim)    return 'linear-gradient(90deg, rgba(20,5,5,0.95) 0%, rgba(8,8,12,0.90) 100%)'
-    return 'linear-gradient(90deg, rgba(12,9,4,0.96) 0%, rgba(8,8,12,0.92) 100%)'
-  }
-
-  // ─── MAIN RETURN ──────────────────────────────────────────────────────────────
   return (
-    <main
-      className="min-h-screen bg-transparent overflow-hidden relative"
-      onMouseMove={onMouseMove}
-      onMouseUp={stopDrag}
-      onMouseLeave={stopDrag}
-    >
+    <>
+      <style>{`
+        @keyframes slideDown {
+          0% { transform: translateY(-100%); opacity: 0; }
+          60% { transform: translateY(4px); opacity: 1; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes cardPop {
+          0% { transform: scale(0.8) translateY(-20px); opacity: 0; }
+          70% { transform: scale(1.05) translateY(0); opacity: 1; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        @keyframes leaderPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+          50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+        }
+      `}</style>
 
-      {/* LEADERBOARD PANEL */}
-      {showLeaderboard && overlayState === 'leaderboard' && (
-        <div
-          className="absolute select-none"
-          style={{
-            left: leaderboardPos.x,
-            top: leaderboardPos.y,
-            width: leaderboardSize.width,
-          }}
-        >
-          {/* Match label bar */}
-          <div
-            className="flex items-center justify-between px-3 py-1"
-            style={{
-              background: 'linear-gradient(90deg, rgba(10,8,4,0.98), rgba(20,15,5,0.95))',
-              borderLeft: '3px solid #c9a84c',
-            }}
-          >
-            <span style={{
-              fontSize: 9, letterSpacing: '3px', textTransform: 'uppercase',
-              color: '#c9a84c', fontWeight: 700, fontFamily: "'Barlow Condensed', sans-serif"
-            }}>
-              {mode === 'overall' ? 'Overall Points' : 'Match Points'}
-            </span>
-            <span style={{
-              fontSize: 9, letterSpacing: '2px',
-              color: 'rgba(200,170,80,0.5)', fontWeight: 600,
-              fontFamily: "'Barlow Condensed', sans-serif"
-            }}>
-              {teams.length} Teams
-            </span>
-          </div>
+      <main
+        className="min-h-screen bg-transparent overflow-hidden relative"
+        onMouseMove={onMouseMove}
+        onMouseUp={stopDrag}
+        onMouseLeave={stopDrag}
+      >
 
-          {/* Gold header / drag handle */}
-          <div
-            className="grid items-center px-2 py-[7px] cursor-grab active:cursor-grabbing"
-            style={{
-              gridTemplateColumns: '42px 1fr 44px 54px',
-              background: 'linear-gradient(90deg, #b8974a 0%, #e8c96a 40%, #c9a84c 100%)',
-              clipPath: 'polygon(0 0, 100% 0, 100% 100%, 8px 100%)',
-            }}
-            onMouseDown={(e) => startDrag(e, 'leaderboard')}
-          >
-            {['RANK', 'TEAM', 'ELIMS', 'ALIVE'].map((h, i) => (
-              <span
-                key={h}
-                className={i <= 1 ? 'text-left' : 'text-center'}
-                style={{
-                  fontSize: 9, fontWeight: 800, letterSpacing: '2.5px',
-                  textTransform: 'uppercase', color: 'rgba(20,10,0,0.75)',
-                  fontFamily: "'Barlow Condensed', sans-serif"
-                }}
-              >
-                {h}
+        {/* FINAL 4 — TOP BAR */}
+        {showFinal4 && overlayState === 'final4' && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 100,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            animation: final4Visible ? 'slideDown 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' : 'none',
+            transform: final4Visible ? 'translateY(0)' : 'translateY(-100%)'
+          }}>
+
+            {/* Header Label */}
+            <div style={{
+              background: f4.bg || '#000000',
+              borderBottom: `2px solid ${f4.highlightColor || '#fbbf24'}`,
+              padding: '6px 32px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              width: '100%',
+              justifyContent: 'center'
+            }}>
+              <div style={{
+                width: '8px', height: '8px',
+                background: f4.highlightColor || '#fbbf24',
+                borderRadius: '50%',
+                animation: 'pulse 1s infinite'
+              }}/>
+              <span style={{
+                color: f4.highlightColor || '#fbbf24',
+                fontSize: '13px',
+                fontWeight: 800,
+                letterSpacing: '6px',
+                fontFamily: "'Rajdhani', monospace",
+                textTransform: 'uppercase'
+              }}>
+                FINAL {aliveTeams.length} TEAMS ALIVE
               </span>
-            ))}
-          </div>
+              <div style={{
+                width: '8px', height: '8px',
+                background: f4.highlightColor || '#fbbf24',
+                borderRadius: '50%',
+                animation: 'pulse 1s infinite'
+              }}/>
+            </div>
 
-          {/* Team rows */}
-          <div
-            className="flex flex-col gap-[1px] mt-[1px]"
-            style={{
-              maxHeight: leaderboardSize.height - 80,
-              overflowY: 'auto',
-            }}
-          >
-            {teamsWithPoints.map((team, index) => {
-              const rank = index + 1
-              const isElim = !team.players?.some(p => p.alive)
-              const alivePlayers = team.players?.filter(p => p.alive).length ?? 0
-              const totalPlayers = team.players?.length ?? 4
-
-              return (
+            {/* Team Cards Row */}
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              padding: '8px 16px',
+              background: `${f4.bg || '#000000'}ee`,
+              borderBottom: `1px solid ${(f4.borderColor || '#fbbf24')}40`,
+              width: '100%',
+              justifyContent: 'center'
+            }}>
+              {aliveTeams.map((team, index) => (
                 <div
                   key={team.id}
-                  className="grid items-center relative overflow-hidden"
                   style={{
-                    gridTemplateColumns: '42px 1fr 44px 54px',
-                    background: getRowBg(rank, isElim),
-                    borderLeft: `3px solid ${getLeftBar(rank, isElim)}`,
-                    padding: '6px 10px 6px 0',
-                    opacity: isElim ? 0.65 : 1,
+                    background: f4.cardBg || '#1a1a00',
+                    border: `1px solid ${f4.borderColor || '#fbbf24'}`,
+                    borderTop: `3px solid ${
+                      index === 0 ? '#ffd700' :
+                      index === 1 ? '#c0c0c0' :
+                      index === 2 ? '#cd7f32' :
+                      f4.highlightColor || '#fbbf24'
+                    }`,
+                    borderRadius: '4px',
+                    padding: '8px 20px',
+                    minWidth: '140px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    animation: `cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s both`,
+                    boxShadow: index === 0 ? `0 0 20px rgba(255,215,0,0.3)` : 'none'
                   }}
                 >
-                  {/* Top shine line */}
-                  <div
-                    className="absolute top-0 right-0 left-[42px] h-px"
-                    style={{ background: 'rgba(255,255,255,0.04)' }}
-                  />
+                  {/* Rank */}
+                  <span style={{
+                    color: index === 0 ? '#ffd700' : index === 1 ? '#c0c0c0' : index === 2 ? '#cd7f32' : f4.highlightColor || '#fbbf24',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    letterSpacing: '3px',
+                    fontFamily: 'monospace'
+                  }}>
+                    #{index + 1}
+                  </span>
 
-                  {/* Rank / team separator */}
-                  <div
-                    className="absolute top-[20%] bottom-[20%]"
-                    style={{ left: 42, width: 1, background: 'rgba(255,255,255,0.07)' }}
-                  />
+                  {/* Team Name */}
+                  <span style={{
+                    color: f4.textColor || '#ffffff',
+                    fontSize: '18px',
+                    fontWeight: 800,
+                    letterSpacing: '2px',
+                    fontFamily: "'Rajdhani', sans-serif",
+                    textTransform: 'uppercase',
+                    lineHeight: 1
+                  }}>
+                    {team.name}
+                  </span>
 
-                  {/* Rank number */}
-                  <div className="flex flex-col items-center justify-center gap-[1px] px-1">
-                    <span style={{
-                      fontSize: rank <= 3 ? 16 : 13,
-                      fontWeight: 800,
-                      color: getRankColor(rank),
-                      lineHeight: 1,
-                      fontFamily: "'Barlow Condensed', sans-serif"
-                    }}>
-                      {rank}
-                    </span>
-                    <span style={{
-                      fontSize: 7, fontWeight: 700, letterSpacing: 1,
-                      color: getRankColor(rank), opacity: 0.7, lineHeight: 1,
-                      fontFamily: "'Barlow Condensed', sans-serif"
-                    }}>
-                      {SUPS[rank]}
-                    </span>
+                  {/* Player Bars */}
+                  <div style={{ display: 'flex', gap: '3px', margin: '4px 0' }}>
+                    {team.players?.map(p => (
+                      <div key={p.id} style={{
+                        width: '20px',
+                        height: '4px',
+                        background: p.alive
+                          ? f4.barColor || '#fbbf24'
+                          : '#374151',
+                        borderRadius: '1px'
+                      }}/>
+                    ))}
                   </div>
 
-                  {/* Team name — NO health bars */}
-                  <div className="px-2 flex items-center">
-                    <p style={{
-                      fontSize: 14, fontWeight: 800, letterSpacing: '1.5px',
-                      textTransform: 'uppercase',
-                      color: isElim ? 'rgba(240,236,224,0.35)' : '#f0ece0',
-                      lineHeight: 1,
-                      fontFamily: "'Barlow Condensed', sans-serif",
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                    }}>
-                      {team.name}
-                    </p>
-                  </div>
-
-                  {/* Kill count */}
-                  <div className="text-center">
-                    <span style={{
-                      fontSize: 17, fontWeight: 800,
-                      color: getKillsColor(rank, isElim),
-                      lineHeight: 1,
-                      fontFamily: "'Barlow Condensed', sans-serif"
-                    }}>
-                      {team.total_kills}
-                    </span>
-                  </div>
-
-                  {/* Alive pips */}
-                  <div className="flex items-center justify-center pr-1">
-                    {isElim ? (
-                      <span style={{
-                        fontSize: 8, fontWeight: 800, letterSpacing: '2px',
-                        color: '#ff4444',
-                        border: '1px solid rgba(255,60,60,0.3)',
-                        padding: '1px 5px',
-                        background: 'rgba(255,0,0,0.07)',
-                        fontFamily: "'Barlow Condensed', sans-serif"
-                      }}>
-                        ELIM
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-[3px]">
-                        {Array.from({ length: totalPlayers }, (_, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              width: 6, height: 6, borderRadius: '50%',
-                              background: i < alivePlayers
-                                ? getRankColor(rank) === 'rgba(180,190,210,0.5)' ? '#e8c96a' : getRankColor(rank)
-                                : 'rgba(255,255,255,0.1)'
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Footer live label */}
-          <div
-            className="flex items-center gap-2 px-3 py-1"
-            style={{
-              background: 'linear-gradient(90deg, rgba(184,151,74,0.15), transparent)',
-              borderTop: '1px solid rgba(184,151,74,0.2)',
-            }}
-          >
-            <div
-              className="w-[5px] h-[5px] rounded-full animate-pulse"
-              style={{ background: '#f70707' }}
-            />
-            <span style={{
-              fontSize: 8, letterSpacing: '2px', textTransform: 'uppercase',
-              color: 'rgba(241, 49, 49, 0.96)', fontWeight: 700,
-              fontFamily: "'Barlow Condensed', sans-serif"
-            }}>
-              Live — {currentMatch?.name || 'Match'}
-            </span>
-          </div>
-
-          {/* Resize handle */}
-          <div
-            className="h-4 flex items-center justify-center cursor-se-resize"
-            style={{
-              background: 'rgba(184,151,74,0.06)',
-              borderTop: '1px solid rgba(184,151,74,0.15)'
-            }}
-            onMouseDown={(e) => { resizing.current = true; e.preventDefault() }}
-          >
-            <div
-              className="w-6 h-[2px] rounded"
-              style={{ background: 'rgba(200,168,76,0.25)' }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* FINAL 4 PANEL — unchanged */}
-      {showFinal4 && overlayState === 'final4' && (
-        <div
-          className="absolute select-none"
-          style={{ left: final4Pos.x, top: final4Pos.y }}
-        >
-          <div
-            className="rounded-t-xl px-4 py-2 cursor-grab active:cursor-grabbing flex items-center gap-2"
-            style={{
-              backgroundColor: f4.cardBg || '#1a1a00',
-              border: `1px solid ${f4.borderColor || '#fbbf24'}`,
-              boxShadow: f4.glowIntensity && f4.glowIntensity !== 'none'
-                ? `0 0 ${glowSize(f4.glowIntensity)} ${f4.borderColor || '#fbbf24'}50`
-                : 'none'
-            }}
-            onMouseDown={(e) => startDrag(e, 'final4')}
-          >
-            <span
-              className="w-2 h-2 rounded-full animate-pulse"
-              style={{ backgroundColor: f4.highlightColor || '#fbbf24' }}
-            />
-            <span
-              className="text-sm font-black uppercase tracking-widest"
-              style={{ color: f4.highlightColor || '#fbbf24' }}
-            >
-              ⚡ Final {aliveTeams.length} Teams
-            </span>
-            <span
-              className="w-2 h-2 rounded-full animate-pulse"
-              style={{ backgroundColor: f4.highlightColor || '#fbbf24' }}
-            />
-          </div>
-
-          <div
-            className="border-x border-b rounded-b-xl p-3 flex flex-col gap-2 min-w-64"
-            style={{
-              backgroundColor: f4.bg || '#000000',
-              borderColor: (f4.borderColor || '#fbbf24') + '50'
-            }}
-          >
-            {aliveTeams.map((team, index) => (
-              <div
-                key={team.id}
-                className="rounded-lg px-3 py-2"
-                style={{
-                  backgroundColor: f4.cardBg || '#1a1a00',
-                  border: `1px solid ${(f4.borderColor || '#fbbf24')}40`
-                }}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="font-black text-sm"
-                      style={{ color: f4.highlightColor || '#fbbf24' }}
-                    >
-                      #{index + 1}
-                    </span>
-                    <span
-                      className="font-bold text-sm"
-                      style={{ color: f4.textColor || '#ffffff' }}
-                    >
-                      {team.name}
-                    </span>
-                  </div>
-                  <span
-                    className="text-xs font-bold"
-                    style={{ color: f4.highlightColor || '#fbbf24' }}
-                  >
-                    {team.total_kills} Kill(s)
+                  {/* Kills */}
+                  <span style={{
+                    color: f4.highlightColor || '#fbbf24',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    letterSpacing: '1px'
+                  }}>
+                    {team.total_kills}K
                   </span>
                 </div>
-                <div className="flex gap-1">
-                  {team.players?.map(p => (
-                    <div
-                      key={p.id}
-                      className="flex-1 rounded-sm h-2"
-                      style={{
-                        backgroundColor: p.alive
-                          ? f4.barColor || '#fbbf24'
-                          : '#374151'
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-    </main>
+        {/* LEADERBOARD PANEL */}
+        {showLeaderboard && overlayState === 'leaderboard' && (
+          <div
+            className="absolute select-none"
+            style={{
+              left: leaderboardPos.x,
+              top: leaderboardPos.y,
+              width: leaderboardSize.width,
+              height: leaderboardSize.height,
+            }}
+          >
+            {/* Header */}
+            <div
+              className="rounded-t-xl px-3 py-2 cursor-grab active:cursor-grabbing flex justify-between items-center"
+              style={{
+                backgroundColor: lb.headerBg || '#064e3b',
+                border: `1px solid ${lb.borderColor || '#10b981'}`,
+                boxShadow: lb.borderGlow ? `0 0 20px ${lb.borderColor || '#10b981'}40` : 'none'
+              }}
+              onMouseDown={(e) => startDrag(e, 'leaderboard')}
+            >
+              <span className="font-black text-xs uppercase tracking-widest"
+                style={{ color: lb.textPrimary || '#ffffff' }}>
+                🏆 Leaderboard
+              </span>
+              <span className="text-[10px] uppercase"
+                style={{ color: lb.textSecondary || '#6b7280' }}>
+                {mode === 'match' ? 'Match Points' : 'Overall Points'}
+              </span>
+            </div>
+
+            {/* Table */}
+            <div
+              className="border-x overflow-y-auto"
+              style={{
+                height: leaderboardSize.height - 70,
+                backgroundColor: lb.panelBg || '#0a0a0c',
+                borderColor: lb.borderColor || '#10b981',
+                opacity: (lb.opacity || 95) / 100
+              }}
+            >
+              <table className="w-full">
+                <thead className="sticky top-0">
+                  <tr style={{ backgroundColor: lb.headerBg || '#064e3b' }}>
+                    <th className="text-left px-2 py-1.5 text-[10px] uppercase"
+                      style={{ color: lb.textSecondary || '#6b7280' }}>#</th>
+                    <th className="text-left px-2 py-1.5 text-[10px] uppercase"
+                      style={{ color: lb.textSecondary || '#6b7280' }}>Team</th>
+                    <th className="px-2 py-1.5 text-[10px] uppercase"
+                      style={{ color: lb.textSecondary || '#6b7280' }}>K</th>
+                    <th className="px-2 py-1.5 text-[10px] uppercase font-bold"
+                      style={{ color: lb.pointsColor || '#fbbf24' }}>PTS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamsWithPoints.map((team, index) => (
+                    <tr key={team.id} className="border-b"
+                      style={{ borderColor: (lb.borderColor || '#10b981') + '20' }}>
+                      <td className="px-2 py-1.5 font-black"
+                        style={{ color: lb.rankColor || '#fbbf24', fontSize: `${lb.fontSize || 12}px` }}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="font-bold"
+                          style={{ color: lb.textPrimary || '#ffffff', fontSize: `${lb.fontSize || 12}px` }}>
+                          {team.name}
+                        </span>
+                        <div className="flex gap-0.5 mt-1">
+                          {team.players?.map(p => (
+                            <div key={p.id} className="flex-1 rounded-sm"
+                              style={{
+                                height: `${lb.barHeight || 6}px`,
+                                backgroundColor: p.alive ? lb.barAlive || '#10b981' : lb.barDead || '#374151'
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <span className="font-bold"
+                          style={{ color: lb.killsColor || '#60a5fa', fontSize: `${lb.fontSize || 12}px` }}>
+                          {team.total_kills}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <span className="font-black"
+                          style={{ color: lb.pointsColor || '#fbbf24', fontSize: `${lb.fontSize || 12}px` }}>
+                          {mode === 'overall' ? team.overallTotal : team.matchTotal}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Resize Handle */}
+            <div
+              className="rounded-b-xl h-5 cursor-se-resize flex items-center justify-center border"
+              style={{
+                backgroundColor: lb.headerBg || '#064e3b',
+                borderColor: lb.borderColor || '#10b981'
+              }}
+              onMouseDown={(e) => { resizing.current = true; e.preventDefault() }}
+            >
+              <div className="w-4 h-0.5 rounded"
+                style={{ backgroundColor: lb.borderColor || '#10b981' }}/>
+            </div>
+          </div>
+        )}
+
+      </main>
+    </>
   )
 }
 
 export default function MainOverlay() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-transparent" />}>
+    <Suspense fallback={<div className="min-h-screen bg-transparent"/>}>
       <MainOverlayContent />
     </Suspense>
   )
