@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/app/lib/supabase'
 import { useParams } from 'next/navigation'
 import ActivityLog from '@/app/components/ActivityLog'
@@ -58,14 +59,51 @@ export default function ManageMatch() {
     fetchTeams()
   }
 
-  async function updatePlayerKills(player, team, value) {
-    const kills = parseInt(value) || 0
-    await supabase.from('players').update({ kills }).eq('id', player.id)
-    const updatedPlayers = team.players.map(p => p.id === player.id ? { ...p, kills } : p)
-    const totalKills = updatedPlayers.reduce((sum, p) => sum + (p.kills || 0), 0)
-    await supabase.from('teams').update({ total_kills: totalKills }).eq('id', team.id)
-    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: team.name, player_name: player.name, action: 'kill_added', message: `${player.name} kills updated to ${kills} in ${team.name} (Total: ${totalKills})` }])
+  const killTimers = useRef({})
+const [localKills, setLocalKills] = useState({})
+
+function handleKillInput(player, team, value) {
+  const kills = parseInt(value) || 0
+
+  // Update local state instantly - no lag
+  setLocalKills(prev => ({ ...prev, [player.id]: kills }))
+
+  // Clear existing timer for this player
+  if (killTimers.current[player.id]) {
+    clearTimeout(killTimers.current[player.id])
+  }
+
+  // Save to DB after 800ms of no typing
+  killTimers.current[player.id] = setTimeout(async () => {
+    await supabase
+      .from('players')
+      .update({ kills })
+      .eq('id', player.id)
+
+    const updatedPlayers = team.players.map(p =>
+      p.id === player.id ? { ...p, kills } : p
+    )
+    const totalKills = updatedPlayers.reduce((sum, p) => {
+      const k = localKills[p.id] !== undefined ? localKills[p.id] : (p.kills || 0)
+      return sum + k
+    }, 0)
+
+    await supabase
+      .from('teams')
+      .update({ total_kills: totalKills })
+      .eq('id', team.id)
+
+    await supabase.from('activity_logs').insert([{
+      match_id: id,
+      team_id: team.id,
+      team_name: team.name,
+      player_name: player.name,
+      action: 'kill_added',
+      message: `${player.name} kills updated to ${kills} in ${team.name} (Total: ${totalKills})`
+    }])
+
     fetchTeams()
+  }, 800)
   }
 
   async function declareWinner(team) {
@@ -689,12 +727,12 @@ export default function ManageMatch() {
                             {player.name}
                           </span>
                           <input
-                            type="number" min="0" max="99"
-                            value={player.kills || 0}
-                            onChange={e => updatePlayerKills(player, team, e.target.value)}
-                            disabled={!player.alive}
-                            className="mm-kills-input"
-                          />
+                            type="number"
+                            min="0"
+                            max="99"
+                            value={localKills[player.id] !== undefined ? localKills[player.id] : (player.kills || 0)}
+                            onChange={(e) => handleKillInput(player, team, e.target.value)}
+                          />  
                           <button
                             onClick={() => player.alive ? eliminatePlayer(player, team) : revivePlayer(player, team)}
                             className={`mm-elim-btn ${player.alive ? 'elim' : 'revive'}`}
