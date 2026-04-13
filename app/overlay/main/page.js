@@ -328,7 +328,18 @@ function MainOverlayContent() {
           <div style={{ textAlign: 'center', zIndex: 10 }}>
             <p style={{ color: by.killsColor || '#9ca3af', fontWeight: 700, fontSize: '18px', letterSpacing: '8px', textTransform: 'uppercase', marginBottom: '16px', fontFamily: 'monospace', animation: 'booyahWinnerFade 0.8s ease forwards' }}>WINNER WINNER</p>
             <h1 style={{ color: by.booyahColor || '#10b981', fontSize: 'clamp(80px, 12vw, 160px)', fontWeight: 900, lineHeight: 1, margin: '0 0 24px', letterSpacing: '-2px', fontFamily: "'Rajdhani', 'Arial Black', sans-serif", textTransform: 'uppercase', animation: 'booyahSlideUp 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, booyahPulse 2s ease 1s infinite', textShadow: `0 0 ${glowSize(by.glowIntensity)} ${by.glowColor || '#10b981'}` }}>BOOYAH!</h1>
-            <div style={{ display: 'inline-block', background: `${by.accentColor || '#10b981'}15`, border: `2px solid ${by.accentColor || '#10b981'}`, borderRadius: '8px', padding: '20px 48px', animation: 'booyahWinnerFade 0.8s ease 0.5s both' }}>
+            <div style={{
+              display:'inline-block',
+              background: theme?.card_bg_image
+                ? `linear-gradient(rgba(0,0,0,${1-(theme?.card_image_opacity||30)/100}),rgba(0,0,0,${1-(theme?.card_image_opacity||30)/100})),url(${theme.card_bg_image})`
+                : '${by.accentColor || "#10b981"}15',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              border: `2px solid ${by.accentColor || '#10b981'}`, 
+              borderRadius: '8px',
+              padding: '20px 48px',
+              animation: 'booyahWinnerFade 0.8s ease 0.5s both'
+            }}>
               <div style={{ color: by.killsColor || '#9ca3af', fontSize: '12px', letterSpacing: '4px', marginBottom: '8px', fontFamily: 'monospace' }}>CHAMPION</div>
               <h2 style={{ color: by.winnerColor || '#ffffff', fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 900, margin: 0, letterSpacing: '4px', fontFamily: "'Rajdhani', 'Arial Black', sans-serif", textTransform: 'uppercase' }}>{winner?.name}</h2>
               <p style={{ color: by.killsColor || '#9ca3af', fontSize: '18px', marginTop: '8px', fontFamily: 'monospace', letterSpacing: '2px' }}>{winner?.total_kills} KILLS</p>
@@ -468,9 +479,13 @@ function MainOverlayContent() {
                       minWidth: '130px',
                       position: 'relative',
                       overflow: 'hidden',
-                      background: index === 0
-                        ? 'linear-gradient(160deg, rgba(40,28,0,0.98) 0%, rgba(20,14,0,0.97) 100%)'
-                        : 'linear-gradient(160deg, rgba(14,11,4,0.98) 0%, rgba(8,6,2,0.97) 100%)',
+                      background: theme?.card_bg_image
+                        ? `linear-gradient(rgba(0,0,0,${1-(theme?.card_image_opacity||30)/100}),rgba(0,0,0,${1-(theme?.card_image_opacity||30)/100})),url(${theme.card_bg_image})`
+                        : index === 0
+                          ? 'linear-gradient(160deg, rgba(40,28,0,0.98) 0%, rgba(20,14,0,0.97) 100%)'
+                          : 'linear-gradient(160deg, rgba(14,11,4,0.98) 0%, rgba(8,6,2,0.97) 100%)',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
                       border: `1px solid ${rc}40`,
                       borderTop: `3px solid ${rc}`,
                       padding: '10px 14px 10px',
@@ -627,7 +642,11 @@ function MainOverlayContent() {
                 return (
                   <div key={team.id} className="grid items-center relative overflow-hidden" style={{
                     gridTemplateColumns: '42px 1fr 44px 54px',
-                    background: getRowBg(rank, isElim),
+                    background: theme?.card_bg_image
+                      ? `linear-gradient(rgba(0,0,0,${1-(theme?.card_image_opacity||30)/100}),rgba(0,0,0,${1-(theme?.card_image_opacity||30)/100})),url(${theme.card_bg_image})`
+                      : getRowBg(rank, isElim),
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
                     borderLeft: `3px solid ${getLeftBar(rank, isElim)}`,
                     padding: '6px 10px 6px 0',
                     opacity: isElim ? 0.65 : 1,

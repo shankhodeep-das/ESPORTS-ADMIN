@@ -469,91 +469,117 @@ export default function ThemeEditor() {
 
               {/* LEADERBOARD PREVIEW */}
               {activeTab === 'leaderboard' && (
-                <div className="te-lb-wrap" style={{
-                  backgroundColor: lb.panelBg,
-                  border: `1px solid ${lb.borderColor}`,
-                  borderRadius: `${lb.borderRadius}px`,
-                  opacity: lb.opacity / 100,
-                  boxShadow: lb.borderGlow ? `0 0 24px ${lb.borderColor}50` : '0 4px 32px rgba(0,0,0,0.6)'
-                }}>
-                  <div className="te-lb-header" style={{ backgroundColor: lb.headerBg }}>
-                    <span className="te-lb-hdr-title" style={{ color: lb.textPrimary, fontSize:`${lb.fontSize}px` }}>Leaderboard</span>
-                    <span className="te-lb-hdr-sub" style={{ color: lb.textSecondary, fontSize:`${Math.max(8,lb.fontSize-2)}px` }}>Match Points</span>
-                  </div>
-                  <div className="te-lb-col-row" style={{ borderBottom:`1px solid ${lb.borderColor}30` }}>
-                    {['#','Team','K','PTS'].map((h,i) => (
-                      <span key={i} style={{ width:i===0?'28px':i===2?'28px':i===3?'36px':'auto', flex:i===1?1:undefined, fontSize:'9px', fontFamily:"'Space Mono',monospace", color:lb.textSecondary, textTransform:'uppercase', letterSpacing:'0.1em', textAlign:i>1?'center':undefined }}>{h}</span>
-                    ))}
-                  </div>
-                  {[{rank:'01',name:'Team ATE',kills:7,pts:17,alive:4},{rank:'02',name:'Team BLX',kills:5,pts:13,alive:3},{rank:'03',name:'Team ITS',kills:3,pts:11,alive:2},{rank:'04',name:'Team CME',kills:2,pts:9,alive:1},{rank:'05',name:'Team RUG',kills:1,pts:7,alive:0}].map((row,i) => (
-                    <div key={i} className="te-lb-row" style={{
-                      borderBottom:`1px solid ${lb.borderColor}18`,
-                      backgroundImage: cardBgImage ? `url(${cardBgImage})` : 'none',
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }}>
-                      {/* Dark overlay on image */}
-                      {cardBgImage && (
-                        <div style={{ position:'absolute', inset:0, background:`rgba(0,0,0,${1 - cardImageOpacity/100})`, zIndex:0 }} />
-                      )}
-                      <span style={{ width:'28px', fontFamily:"'Space Mono',monospace", fontSize:`${lb.fontSize}px`, fontWeight:700, color:lb.rankColor, position:'relative', zIndex:1 }}>{row.rank}</span>
-                      <div className="te-lb-name-col">
-                        <span style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:`${lb.fontSize}px`, fontWeight:700, color:lb.textPrimary }}>{row.name}</span>
-                        <div style={{ display:'flex', gap:'3px' }}>
-                          {[1,2,3,4].map(p => (
-                            <div key={p} style={{ flex:1, height:`${lb.barHeight}px`, borderRadius:'2px', background:p<=row.alive?lb.barAlive:lb.barDead }} />
-                          ))}
+                <div style={{ width: 340, fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {/* Match label */}
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 12px', background:'linear-gradient(90deg,rgba(10,8,4,0.98),rgba(20,15,5,0.95))', borderLeft:'3px solid #c9a84c' }}>
+                      <span style={{ fontSize:9, letterSpacing:'3px', textTransform:'uppercase', color:'#c9a84c', fontWeight:700 }}>Match Points</span>
+                      <span style={{ fontSize:9, letterSpacing:'2px', color:'rgba(200,170,80,0.5)', fontWeight:600 }}>5 Teams</span>
+                    </div>
+                    {/* Gold header */}
+                    <div style={{ display:'grid', gridTemplateColumns:'42px 1fr 44px 54px', alignItems:'center', padding:'7px 10px', background:'linear-gradient(90deg,#b8974a 0%,#e8c96a 40%,#c9a84c 100%)', clipPath:'polygon(0 0,100% 0,100% 100%,8px 100%)' }}>
+                      {['RANK','TEAM','ELIMS','ALIVE'].map((h,i) => (
+                        <span key={h} style={{ fontSize:9, fontWeight:800, letterSpacing:'2.5px', textTransform:'uppercase', color:'rgba(20,10,0,0.75)', textAlign:i<=1?'left':'center' }}>{h}</span>
+                      ))}
+                    </div>
+                    {/* Rows */}
+                    {[{rank:1,name:'Team ATE',kills:7,alive:4,elim:false},{rank:2,name:'Team BLX',kills:5,alive:3,elim:false},{rank:3,name:'Team ITS',kills:3,alive:2,elim:false},{rank:4,name:'Team CME',kills:0,alive:0,elim:true},{rank:5,name:'Team RUG',kills:0,alive:0,elim:true}].map((row,i) => {
+                      const rc = i===0?'#FFD700':i===1?'#D4D4D4':i===2?'#cd7f32':'rgba(180,190,210,0.5)'
+                    return (
+                      <div key={i} style={{
+                        display:'grid', gridTemplateColumns:'42px 1fr 44px 54px',
+                        alignItems:'center',
+                        background: cardBgImage
+                          ? `linear-gradient(rgba(0,0,0,${1-cardImageOpacity/100}),rgba(0,0,0,${1-cardImageOpacity/100})),url(${cardBgImage})`
+                          : i===0?'linear-gradient(90deg,rgba(30,22,0,0.97),rgba(10,8,4,0.93))'
+                          : i===1?'linear-gradient(90deg,rgba(20,20,22,0.97),rgba(8,8,12,0.93))'
+                          : i===2?'linear-gradient(90deg,rgba(22,14,4,0.97),rgba(8,8,12,0.93))'
+                          : row.elim?'linear-gradient(90deg,rgba(20,5,5,0.95),rgba(8,8,12,0.90))'
+                          : 'linear-gradient(90deg,rgba(12,9,4,0.96),rgba(8,8,12,0.92))',
+                        backgroundSize:'cover', backgroundPosition:'center',
+                        borderLeft:`3px solid ${rc}`,
+                        padding:'6px 10px 6px 0',
+                        marginTop:1,
+                        opacity: row.elim?0.65:1
+                      }}>
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:1, padding:'0 4px' }}>
+                          <span style={{ fontSize:row.rank<=3?16:13, fontWeight:800, color:rc, lineHeight:1 }}>{row.rank}</span>
+                          <span style={{ fontSize:7, fontWeight:700, color:rc, opacity:0.7 }}>{['','ST','ND','RD','TH','TH'][row.rank]}</span>
+                        </div>
+                        <div style={{ padding:'0 8px' }}>
+                          <p style={{ fontSize:14, fontWeight:800, letterSpacing:'1.5px', textTransform:'uppercase', color:row.elim?'rgba(240,236,224,0.35)':'#f0ece0', lineHeight:1 }}>{row.name}</p>
+                        </div>
+                        <div style={{ textAlign:'center' }}>
+                          <span style={{ fontSize:17, fontWeight:800, color:rc, lineHeight:1 }}>{row.kills}</span>
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          {row.elim ? (
+                            <span style={{ fontSize:8, fontWeight:800, letterSpacing:'2px', color:'#ff4444', border:'1px solid rgba(255,60,60,0.3)', padding:'1px 5px', background:'rgba(255,0,0,0.07)' }}>ELIM</span>
+                          ) : (
+                            <div style={{ display:'flex', gap:3 }}>
+                              {[0,1,2,3].map(p => (
+                                <div key={p} style={{ width:6, height:6, borderRadius:'50%', background:p<row.alive?rc:'rgba(255,255,255,0.1)' }}/>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <span style={{ width:'28px', fontFamily:"'Space Mono',monospace", fontSize:`${lb.fontSize}px`, fontWeight:700, color:lb.killsColor, textAlign:'center', position:'relative', zIndex:1 }}>{row.kills}</span>
-                      <span style={{ width:'36px', fontFamily:"'Space Mono',monospace", fontSize:`${lb.fontSize}px`, fontWeight:700, color:lb.pointsColor, textAlign:'center', position:'relative', zIndex:1 }}>{row.pts}</span>
-                    </div>
-                  ))}
+                    )
+                })}
+                {/* Footer */}
+                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 12px', background:'linear-gradient(90deg,rgba(184,151,74,0.15),transparent)', borderTop:'1px solid rgba(184,151,74,0.2)' }}>
+                  <div style={{ width:5, height:5, borderRadius:'50%', background:'#f70707' }}/>
+                  <span style={{ fontSize:8, letterSpacing:'2px', textTransform:'uppercase', color:'rgba(241,49,49,0.96)', fontWeight:700 }}>Live — Match</span>
                 </div>
-              )}
+              </div>
+            )}
 
               {/* FINAL 4 PREVIEW */}
               {activeTab === 'final4' && (
-                <div className="te-f4-wrap" style={{
-                  backgroundColor: f4.bg,
-                  border: `1px solid ${f4.borderColor}`,
-                  borderRadius: '12px',
-                  boxShadow: f4.glowIntensity !== 'none' ? `0 0 ${f4.glowIntensity==='low'?'14px':f4.glowIntensity==='medium'?'28px':'50px'} ${f4.borderColor}55` : '0 4px 32px rgba(0,0,0,0.6)'
-                }}>
-                  <div className="te-f4-header" style={{ backgroundColor: f4.cardBg, borderBottom:`1px solid ${f4.borderColor}40` }}>
-                    <div className="te-f4-dot" style={{ background: f4.highlightColor }} />
-                    <span className="te-f4-title" style={{ color: f4.highlightColor }}>Final 4</span>
-                    <div className="te-f4-dot" style={{ background: f4.highlightColor }} />
+                <div style={{ fontFamily:"'Barlow Condensed',sans-serif", width:'100%', maxWidth:700 }}>
+                  {/* Header strip */}
+                  <div style={{ background:'linear-gradient(90deg,#0a0600,#1a0e00,#0a0600)', borderBottom:'2px solid #c9a84c', padding:'5px 0', display:'flex', alignItems:'center', justifyContent:'center', gap:16 }}>
+                    <div style={{ flex:1, height:1, background:'linear-gradient(90deg,transparent,#c9a84c)', maxWidth:120 }}/>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <div style={{ width:6, height:6, borderRadius:'50%', background:'#ff4444' }}/>
+                      <span style={{ fontSize:11, fontWeight:800, letterSpacing:'5px', textTransform:'uppercase', color:'#c9a84c' }}>Final 4 Teams Alive</span>
+                      <div style={{ width:6, height:6, borderRadius:'50%', background:'#ff4444' }}/>
+                    </div>
+                    <div style={{ flex:1, height:1, background:'linear-gradient(90deg,#c9a84c,transparent)', maxWidth:120 }}/>
                   </div>
-                  <div className="te-f4-teams">
-                    {['Team ATE','Team BLX','Team ITS','Team CME'].map((name,i) => (
-                      <div key={i} className="te-f4-team" style={{
-                        backgroundImage: cardBgImage ? `url(${cardBgImage})` : 'none',
-                        backgroundColor: f4.cardBg,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        border:`1px solid ${f4.borderColor}35`
-                      }}>
-                        {cardBgImage && (
-                          <div style={{ position:'absolute', inset:0, background:`rgba(0,0,0,${1 - cardImageOpacity/100})`, borderRadius:'8px', zIndex:0 }} />
-                        )}
-                        <div className="te-f4-team-row">
-                          <div className="te-f4-team-left">
-                            <span className="te-f4-rank" style={{ color:f4.highlightColor }}>#{i+1}</span>
-                            <span className="te-f4-name" style={{ color:f4.textColor }}>{name}</span>
+                  {/* Team cards */}
+                  <div style={{ display:'flex', gap:6, padding:'8px 20px 10px', background:'linear-gradient(180deg,rgba(8,5,0,0.97),rgba(4,3,0,0.95))', borderBottom:'1px solid rgba(201,168,76,0.2)', justifyContent:'center' }}>
+                    {[{name:'Team ATE',kills:7,rank:0},{name:'Team BLX',kills:5,rank:1},{name:'Team ITS',kills:3,rank:2},{name:'Team CME',kills:1,rank:3}].map((team,i) => {
+                      const rc = ['#FFD700','#C0C0C0','#cd7f32','#e8c96a'][i]
+                      return (
+                        <div key={i} style={{
+                          flex:1, maxWidth:180, minWidth:120, position:'relative', overflow:'hidden',
+                            background: cardBgImage
+                              ? `linear-gradient(rgba(0,0,0,${1-cardImageOpacity/100}),rgba(0,0,0,${1-cardImageOpacity/100})),url(${cardBgImage})`
+                              : i===0?'linear-gradient(160deg,rgba(40,28,0,0.98),rgba(20,14,0,0.97))':'linear-gradient(160deg,rgba(14,11,4,0.98),rgba(8,6,2,0.97))',
+                            backgroundSize:'cover', backgroundPosition:'center',
+                            border:`1px solid ${rc}40`, borderTop:`3px solid ${rc}`, padding:'10px 14px'
+                          }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:5 }}>
+                              <span style={{ fontSize:10, fontWeight:900, letterSpacing:'2px', color:rc }}>#{i+1}</span>
+                              <div style={{ flex:1, height:1, background:`linear-gradient(90deg,${rc}50,transparent)` }}/>
+                              <span style={{ fontSize:10, fontWeight:800, color:rc, background:`${rc}15`, padding:'1px 6px', border:`1px solid ${rc}30` }}>{team.kills}K</span>
+                            </div>
+                            <div style={{ fontSize:i===0?20:18, fontWeight:900, letterSpacing:'2px', textTransform:'uppercase', color:i===0?'#fff8e1':'#f0ece0', lineHeight:1, marginBottom:8 }}>{team.name}</div>
+                            <div style={{ display:'flex', gap:4 }}>
+                              {[0,1,2,3].map(p => (
+                                <div key={p} style={{ flex:1, height:p<4-i?5:3, borderRadius:2, background:p<4-i?rc:'rgba(255,255,255,0.1)' }}/>
+                              ))}
+                            </div>
+                            <div style={{ marginTop:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                              <span style={{ fontSize:9, letterSpacing:'2px', textTransform:'uppercase', color:'rgba(201,168,76,0.4)' }}>PTS</span>
+                              <span style={{ fontSize:14, fontWeight:900, color:rc }}>{17-i*4}</span>
+                            </div>
                           </div>
-                          <span className="te-f4-kills" style={{ color:f4.highlightColor }}>{7-i*2}K</span>
-                        </div>
-                        <div className="te-f4-bars">
-                          {[1,2,3,4].map(p => (
-                            <div key={p} style={{ flex:1, height:'5px', borderRadius:'2px', background:p<=4-i?f4.barColor:'#374151' }} />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* BOOYAH PREVIEW */}
               {activeTab === 'booyah' && (
