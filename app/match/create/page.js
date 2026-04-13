@@ -5,6 +5,9 @@ import { supabase } from '@/app/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+// ✅ Paste your deployed Apps Script Web App URL here
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyWQd9Ht1BtKQl-WiKqev37gQci2NGO5k_TeAJoDa_IYGRapwcWrpKqfF-2kUdDF1NbVA/exec'
+
 export default function CreateMatch() {
   const router = useRouter()
 
@@ -14,6 +17,7 @@ export default function CreateMatch() {
   const [game, setGame] = useState('BGMI')
   const [customGame, setCustomGame] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sheetStatus, setSheetStatus] = useState(null) // null | 'creating' | 'done' | 'error'
 
   const finalGame = customGame || game
 
@@ -22,10 +26,12 @@ export default function CreateMatch() {
     if (!title) return alert('Please enter a match title')
     setLoading(true)
 
-    const { error } = await supabase
+    // 1. Create match in Supabase
+    const { data: matchData, error } = await supabase
       .from('matches')
       .insert([{ title, map, round, status: 'waiting', game: finalGame }])
       .select()
+      .single()
 
     if (error) {
       alert('Error creating match: ' + error.message)
@@ -33,7 +39,36 @@ export default function CreateMatch() {
       return
     }
 
-    router.push('/dashboard')
+    const matchId = matchData.id
+
+    // 2. Auto-generate Google Sheet
+    setSheetStatus('creating')
+    try {
+      const res = await fetch(
+        `${APPS_SCRIPT_URL}?action=create&match_id=${matchId}`
+      )
+      const json = await res.json()
+
+      if (json.success) {
+        // Save sheet_url to match record (Apps Script already saves sheet_id)
+        await supabase
+          .from('matches')
+          .update({ sheet_url: json.sheet_url })
+          .eq('id', matchId)
+
+        setSheetStatus('done')
+        // Brief pause so user sees success, then navigate
+        setTimeout(() => router.push('/dashboard'), 1200)
+      } else {
+        setSheetStatus('error')
+        console.error('Sheet creation failed:', json.error)
+        router.push('/dashboard')
+      }
+    } catch (err) {
+      setSheetStatus('error')
+      console.error('Apps Script error:', err)
+      router.push('/dashboard')
+    }
   }
 
   return (
@@ -60,6 +95,27 @@ export default function CreateMatch() {
             </p>
           </div>
         </header>
+
+        {/* Sheet creation overlay status */}
+        {sheetStatus === 'creating' && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0a0c]/90 rounded-3xl backdrop-blur-sm gap-4">
+            <div className="w-10 h-10 border-2 border-[#10b981]/20 border-t-[#10b981] rounded-full animate-spin" />
+            <div className="text-center">
+              <p className="text-[#10b981] font-bold text-sm uppercase tracking-widest">Creating Google Sheet</p>
+              <p className="text-slate-500 text-xs mt-1">Setting up your match control sheet…</p>
+            </div>
+          </div>
+        )}
+
+        {sheetStatus === 'done' && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0a0a0c]/90 rounded-3xl backdrop-blur-sm gap-4">
+            <div className="w-14 h-14 rounded-full bg-[#10b981]/10 flex items-center justify-center text-[#10b981] text-2xl">✓</div>
+            <div className="text-center">
+              <p className="text-[#10b981] font-bold text-sm uppercase tracking-widest">Sheet Created!</p>
+              <p className="text-slate-500 text-xs mt-1">Redirecting to dashboard…</p>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleCreate} className="flex flex-col gap-6">
 
@@ -104,7 +160,6 @@ export default function CreateMatch() {
                 </button>
               ))}
             </div>
-              {/* Custom Game Toggle + Input */}
             <button
               type="button"
               onClick={() => setCustomGame(customGame === null ? '' : null)}
@@ -122,14 +177,14 @@ export default function CreateMatch() {
                   setCustomGame(e.target.value)
                   setMap('')
                 }}
-              className="w-full px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm
-                        placeholder:text-slate-600 focus:outline-none focus:border-[#10b981] focus:ring-4 focus:ring-[#10b981]/10
-                        transition-all duration-300"
+                className="w-full px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm
+                          placeholder:text-slate-600 focus:outline-none focus:border-[#10b981] focus:ring-4 focus:ring-[#10b981]/10
+                          transition-all duration-300"
               />
             )}
           </div>
 
-          {/* Map Input with Datalist */}
+          {/* Map Input */}
           <div className="flex flex-col gap-2 group/input">
             <label className="text-xs font-bold tracking-widest text-slate-400 uppercase ml-1 transition-colors group-focus-within/input:text-[#10b981]">
               Map
@@ -147,20 +202,14 @@ export default function CreateMatch() {
             <datalist id="map-options">
               {!customGame && game === 'BGMI' && (
                 <>
-                  <option value="Erangel" />
-                  <option value="Miramar" />
-                  <option value="Sanhok" />
-                  <option value="Vikendi" />
-                  <option value="Livik" />
+                  <option value="Erangel" /><option value="Miramar" />
+                  <option value="Sanhok" /><option value="Vikendi" /><option value="Livik" />
                 </>
               )}
               {!customGame && game === 'Free Fire' && (
                 <>
-                  <option value="Bermuda" />
-                  <option value="Purgatory" />
-                  <option value="Kalahari" />
-                  <option value="Alpine" />
-                  <option value="Nexterra" />
+                  <option value="Bermuda" /><option value="Purgatory" />
+                  <option value="Kalahari" /><option value="Alpine" /><option value="Nexterra" />
                 </>
               )}
             </datalist>
@@ -182,6 +231,14 @@ export default function CreateMatch() {
             />
           </div>
 
+          {/* Info banner */}
+          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[#10b981]/5 border border-[#10b981]/15">
+            <svg className="text-[#10b981] mt-0.5 shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              A <span className="text-[#10b981] font-bold">Google Sheet</span> will be auto-created for this match. Operators can manage kills, eliminations & revivals directly in the sheet — no dashboard access needed.
+            </p>
+          </div>
+
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row items-center gap-4 mt-4">
             <Link
@@ -199,7 +256,7 @@ export default function CreateMatch() {
                          hover:-translate-y-1.5 hover:bg-[#1fd998] hover:shadow-[0_15px_30px_-5px_rgba(16,185,129,0.5)]
                          active:translate-y-0.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating...' : 'Create Match'}
+              {loading ? 'Creating...' : 'Create Match + Sheet'}
             </button>
           </div>
 
