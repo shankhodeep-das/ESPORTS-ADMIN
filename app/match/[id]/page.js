@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/app/lib/supabase'
 import { useParams } from 'next/navigation'
-import ActivityLog from '@/app/components/ActivityLog'
 import Link from 'next/link'
 
 export default function ManageMatch() {
@@ -11,28 +10,54 @@ export default function ManageMatch() {
   const [match, setMatch] = useState(null)
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
-  const [editingTeamId, setEditingTeamId] = useState(null)
-  const [editingName, setEditingName] = useState('')
   const [addingTeam, setAddingTeam] = useState(false)
   const [settings, setSettings] = useState(null)
   const [copiedUrl, setCopiedUrl] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [editingCell, setEditingCell] = useState(null) // { teamIdx, playerIdx, field }
+  const [editingValue, setEditingValue] = useState('')
+  const [selectedRows, setSelectedRows] = useState(new Set())
+  const [booyahTeamId, setBooyahTeamId] = useState(null)
+  const [logs, setLogs] = useState([])
+  const killTimers = useRef({})
+  const [localKills, setLocalKills] = useState({})
+  const inputRef = useRef(null)
 
-  useEffect(() => { fetchMatch(); fetchTeams(); fetchSettings() }, [])
+  useEffect(() => { fetchMatch(); fetchTeams(); fetchSettings(); fetchLogs() }, [])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('sheet-logs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs' }, () => fetchLogs())
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [])
+
+  useEffect(() => {
+    if (editingCell && inputRef.current) inputRef.current.focus()
+  }, [editingCell])
 
   async function fetchMatch() {
     const { data } = await supabase.from('matches').select('*').eq('id', id).single()
     setMatch(data)
   }
-
   async function fetchSettings() {
     const { data } = await supabase.from('overlay_settings').select('*').eq('match_id', id).single()
     setSettings(data)
   }
-
   async function fetchTeams() {
     const { data } = await supabase.from('teams').select('*, players(*)').eq('match_id', id).order('slot_number')
     setTeams(data || [])
     setLoading(false)
+  }
+  async function fetchLogs() {
+    const { data } = await supabase.from('activity_logs').select('*').eq('match_id', id).order('created_at', { ascending: false }).limit(30)
+    setLogs(data || [])
+  }
+
+  function showToast(msg, type = 'success') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 2500)
   }
 
   async function addTeam() {
@@ -40,89 +65,80 @@ export default function ManageMatch() {
     setAddingTeam(true)
     const slotNumber = teams.length + 1
     const { data: team } = await supabase.from('teams').insert([{ match_id: id, slot_number: slotNumber, name: `Team ${slotNumber}`, total_kills: 0 }]).select().single()
-    await supabase.from('players').insert([{ team_id: team.id, name: 'P1' }, { team_id: team.id, name: 'P2' }, { team_id: team.id, name: 'P3' }, { team_id: team.id, name: 'P4' }])
-    await supabase.from('activity_logs').insert([{ match_id: id, team_name: team.name, action: 'team_added', message: `Team ${team.name} added to slot ${slotNumber}` }])
+    await supabase.from('players').insert([{ team_id: team.id, name: 'P1', alive: true, kills: 0 }, { team_id: team.id, name: 'P2', alive: true, kills: 0 }, { team_id: team.id, name: 'P3', alive: true, kills: 0 }, { team_id: team.id, name: 'P4', alive: true, kills: 0 }])
+    await supabase.from('activity_logs').insert([{ match_id: id, team_name: team.name, action: 'team_added', message: `Team "${team.name}" added to slot ${slotNumber}` }])
     await fetchTeams()
     setAddingTeam(false)
-  }
-
-  async function eliminatePlayer(player, team) {
-    await supabase.from('players').update({ alive: false }).eq('id', player.id)
-    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: team.name, player_name: player.name, action: 'eliminated', message: `${player.name} eliminated from ${team.name}` }])
-    fetchTeams()
-  }
-
-  async function revivePlayer(player, team) {
-    await supabase.from('players').update({ alive: true }).eq('id', player.id)
-    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: team.name, player_name: player.name, action: 'revived', message: `${player.name} revived in ${team.name}` }])
-    fetchTeams()
-  }
-
-  const killTimers = useRef({})
-const [localKills, setLocalKills] = useState({})
-
-function handleKillInput(player, team, value) {
-  const kills = parseInt(value) || 0
-
-  // Update local state instantly - no lag
-  setLocalKills(prev => ({ ...prev, [player.id]: kills }))
-
-  // Clear existing timer for this player
-  if (killTimers.current[player.id]) {
-    clearTimeout(killTimers.current[player.id])
-  }
-
-  // Save to DB after 800ms of no typing
-  killTimers.current[player.id] = setTimeout(async () => {
-    await supabase
-      .from('players')
-      .update({ kills })
-      .eq('id', player.id)
-
-    const updatedPlayers = team.players.map(p =>
-      p.id === player.id ? { ...p, kills } : p
-    )
-    const totalKills = updatedPlayers.reduce((sum, p) => {
-      const k = localKills[p.id] !== undefined ? localKills[p.id] : (p.kills || 0)
-      return sum + k
-    }, 0)
-
-    await supabase
-      .from('teams')
-      .update({ total_kills: totalKills })
-      .eq('id', team.id)
-
-    await supabase.from('activity_logs').insert([{
-      match_id: id,
-      team_id: team.id,
-      team_name: team.name,
-      player_name: player.name,
-      action: 'kill_added',
-      message: `${player.name} kills updated to ${kills} in ${team.name} (Total: ${totalKills})`
-    }])
-
-    fetchTeams()
-  }, 800)
-  }
-
-  async function declareWinner(team) {
-    await supabase.from('matches').update({ status: 'finished' }).eq('id', id)
-    await supabase.from('teams').update({ placement: 1 }).eq('id', team.id)
-    await supabase.from('activity_logs').insert([{ match_id: id, team_name: team.name, action: 'winner', message: `Winner declared: ${team.name}` }])
-    fetchTeams(); fetchMatch()
-  }
-
-  async function updateTeamName(team) {
-    if (!editingName.trim()) return
-    await supabase.from('teams').update({ name: editingName }).eq('id', team.id)
-    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: editingName, action: 'team_renamed', message: `Team renamed from ${team.name} to ${editingName}` }])
-    setEditingTeamId(null); setEditingName(''); fetchTeams()
+    showToast(`Team ${slotNumber} added`)
   }
 
   async function updateMatchStatus(newStatus) {
     await supabase.from('matches').update({ status: newStatus }).eq('id', id)
-    await supabase.from('activity_logs').insert([{ match_id: id, action: 'status_changed', message: `Match status changed to ${newStatus.toUpperCase()}` }])
+    await supabase.from('activity_logs').insert([{ match_id: id, action: 'status_changed', message: `Match status → ${newStatus.toUpperCase()}` }])
     fetchMatch()
+    showToast(`Status: ${newStatus}`)
+  }
+
+  async function updateTeamName(team, newName) {
+    if (!newName.trim()) return
+    await supabase.from('teams').update({ name: newName }).eq('id', team.id)
+    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: newName, action: 'team_renamed', message: `Team renamed: "${team.name}" → "${newName}"` }])
+    fetchTeams()
+  }
+
+  async function updatePlayerName(player, team, newName) {
+    if (!newName.trim()) return
+    await supabase.from('players').update({ name: newName }).eq('id', player.id)
+    fetchTeams()
+  }
+
+  function handleKillInput(player, team, value) {
+    const kills = parseInt(value) || 0
+    setLocalKills(prev => ({ ...prev, [player.id]: kills }))
+    if (killTimers.current[player.id]) clearTimeout(killTimers.current[player.id])
+    killTimers.current[player.id] = setTimeout(async () => {
+      await supabase.from('players').update({ kills }).eq('id', player.id)
+      const updatedPlayers = team.players.map(p => p.id === player.id ? { ...p, kills } : p)
+      const totalKills = updatedPlayers.reduce((sum, p) => {
+        const k = localKills[p.id] !== undefined ? localKills[p.id] : (p.kills || 0)
+        return sum + k
+      }, 0)
+      await supabase.from('teams').update({ total_kills: totalKills }).eq('id', team.id)
+      await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: team.name, player_name: player.name, action: 'kill_added', message: `${player.name} (${team.name}): kills → ${kills} | Team total: ${totalKills}` }])
+      fetchTeams()
+    }, 600)
+  }
+
+  async function toggleElim(player, team) {
+    const newAlive = !player.alive
+    await supabase.from('players').update({ alive: newAlive }).eq('id', player.id)
+    const action = newAlive ? 'revived' : 'eliminated'
+    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: team.name, player_name: player.name, action, message: `${player.name} (${team.name}) ${action}` }])
+    fetchTeams()
+    showToast(`${player.name} ${newAlive ? 'revived' : 'eliminated'}`, newAlive ? 'success' : 'danger')
+  }
+
+  async function eliminateAllInTeam(team) {
+    await Promise.all(team.players.map(p => supabase.from('players').update({ alive: false }).eq('id', p.id)))
+    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: team.name, action: 'eliminated', message: `All players in "${team.name}" eliminated` }])
+    fetchTeams()
+    showToast(`${team.name}: all eliminated`, 'danger')
+  }
+
+  async function reviveAllInTeam(team) {
+    await Promise.all(team.players.map(p => supabase.from('players').update({ alive: true }).eq('id', p.id)))
+    await supabase.from('activity_logs').insert([{ match_id: id, team_id: team.id, team_name: team.name, action: 'revived', message: `All players in "${team.name}" revived` }])
+    fetchTeams()
+    showToast(`${team.name}: all revived`, 'success')
+  }
+
+  async function declareBooyah(team) {
+    setBooyahTeamId(team.id)
+    await supabase.from('matches').update({ status: 'finished' }).eq('id', id)
+    await supabase.from('teams').update({ placement: 1 }).eq('id', team.id)
+    await supabase.from('activity_logs').insert([{ match_id: id, team_name: team.name, action: 'winner', message: `BOOYAH! Winner: "${team.name}"` }])
+    fetchTeams(); fetchMatch()
+    showToast(`🏆 ${team.name} wins!`, 'success')
   }
 
   async function getOrCreateSettings() {
@@ -131,642 +147,614 @@ function handleKillInput(player, team, value) {
     const { data: ns } = await supabase.from('overlay_settings').insert([{ match_id: id }]).select().single()
     return ns
   }
-
   async function updateOverlaySetting(key, value) {
     const s = await getOrCreateSettings()
     await supabase.from('overlay_settings').update({ [key]: value }).eq('id', s.id)
     fetchSettings()
   }
-
   function copyOverlayUrl() {
     navigator.clipboard.writeText(`${window.location.origin}/overlay/main?match=${id}`)
     setCopiedUrl(true)
     setTimeout(() => setCopiedUrl(false), 2000)
+    showToast('Overlay URL copied!')
+  }
+
+  function startEdit(teamIdx, playerIdx, field, currentValue) {
+    setEditingCell({ teamIdx, playerIdx, field })
+    setEditingValue(String(currentValue))
+  }
+  function cancelEdit() { setEditingCell(null); setEditingValue('') }
+  function commitEdit() {
+    if (!editingCell) return
+    const { teamIdx, playerIdx, field } = editingCell
+    const team = teams[teamIdx]
+    if (field === 'teamName') {
+      updateTeamName(team, editingValue)
+    } else if (field === 'playerName') {
+      const player = team.players[playerIdx]
+      updatePlayerName(player, team, editingValue)
+    } else if (field === 'kills') {
+      const player = team.players[playerIdx]
+      handleKillInput(player, team, editingValue)
+    }
+    cancelEdit()
   }
 
   const aliveCount = (team) => team.players?.filter(p => p.alive).length ?? 0
+  const teamKills = (team) => team.players?.reduce((s, p) => s + (localKills[p.id] !== undefined ? localKills[p.id] : (p.kills || 0)), 0) ?? 0
+
+  const statusColor = { waiting: '#f5c842', live: '#e84040', finished: '#10b981' }
+  const statusBg = { waiting: 'rgba(245,200,66,0.12)', live: 'rgba(232,64,64,0.12)', finished: 'rgba(16,185,129,0.12)' }
 
   if (loading) return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;500;600&display=swap');
-        body { background: #060709; }
-        .mm-load { min-height:100vh; display:flex; align-items:center; justify-content:center; background:#060709; font-family:'Space Mono',monospace; }
-        .mm-load-inner { text-align:center; }
-        .mm-load-ring { width:48px; height:48px; border:2px solid rgba(16,185,129,0.15); border-top:2px solid #10b981; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
-        .mm-load-txt { font-size:10px; color:rgba(16,185,129,0.4); letter-spacing:0.18em; text-transform:uppercase; }
-        @keyframes spin { to { transform:rotate(360deg); } }
-      `}</style>
-      <div className="mm-load">
-        <div className="mm-load-inner">
-          <div className="mm-load-ring" />
-          <div className="mm-load-txt">Loading Match</div>
-        </div>
+    <div style={{ minHeight: '100vh', background: '#0a0c0f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Space Mono', monospace" }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ width: 40, height: 40, border: '2px solid rgba(16,185,129,0.2)', borderTop: '2px solid #10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
+        <div style={{ fontSize: 10, color: 'rgba(16,185,129,0.4)', letterSpacing: '0.18em', textTransform: 'uppercase' }}>Loading Match</div>
       </div>
-    </>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   )
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;500;600&display=swap');
-        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;500;600;700&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* ══ ROOT ══ */
-        .mm-root {
-          min-height:100vh; background:#060709;
-          font-family:'Barlow Condensed',sans-serif;
-          color:#e8f4ee; position:relative;
-          overflow-x:hidden; isolation:isolate;
+        .sh-root {
+          min-height: 100vh;
+          background: #0a0c0f;
+          font-family: 'Barlow Condensed', sans-serif;
+          color: #e2e8e4;
         }
 
-        /* ══ AURORA ORBS ══ */
-        .mm-orb { position:fixed; border-radius:50%; pointer-events:none; z-index:0; }
-        .mm-o1 { width:650px; height:650px; background:radial-gradient(circle,rgba(16,185,129,0.22) 0%,transparent 65%); top:-220px; left:-160px; filter:blur(60px); animation:oa 14s ease-in-out infinite alternate; }
-        .mm-o2 { width:520px; height:520px; background:radial-gradient(circle,rgba(124,58,237,0.18) 0%,transparent 65%); top:-100px; right:-130px; filter:blur(62px); animation:ob 17s ease-in-out infinite alternate; }
-        .mm-o3 { width:420px; height:420px; background:radial-gradient(circle,rgba(6,182,212,0.13) 0%,transparent 65%); bottom:15%; left:-80px; filter:blur(55px); animation:oc 11s ease-in-out infinite alternate; }
-        .mm-o4 { width:460px; height:460px; background:radial-gradient(circle,rgba(16,185,129,0.14) 0%,transparent 65%); bottom:-120px; right:-90px; filter:blur(58px); animation:od 9s ease-in-out infinite alternate; }
-        .mm-o5 { width:300px; height:300px; background:radial-gradient(circle,rgba(236,72,153,0.08) 0%,transparent 65%); top:50%; left:45%; filter:blur(52px); animation:oa 13s ease-in-out infinite alternate-reverse; }
-
-        @keyframes oa { from{transform:translate(0,0) scale(1)} to{transform:translate(55px,-70px) scale(1.14)} }
-        @keyframes ob { from{transform:translate(0,0) scale(1)} to{transform:translate(-65px,80px) scale(1.2)} }
-        @keyframes oc { from{transform:translate(0,0) scale(1)} to{transform:translate(45px,-55px) scale(1.1)} }
-        @keyframes od { from{transform:translate(0,0) scale(1)} to{transform:translate(-40px,60px) scale(1.18)} }
-
-        /* Grid + noise */
-        .mm-grid { position:fixed; inset:0; pointer-events:none; z-index:0; background-image:repeating-linear-gradient(0deg,rgba(16,185,129,0.032) 0px,rgba(16,185,129,0.032) 1px,transparent 1px,transparent 44px),repeating-linear-gradient(90deg,rgba(16,185,129,0.024) 0px,rgba(16,185,129,0.024) 1px,transparent 1px,transparent 44px); }
-        .mm-noise { position:fixed; inset:0; pointer-events:none; z-index:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); background-size:180px 180px; mix-blend-mode:overlay; opacity:0.35; }
-
-        /* ══ CONTENT ══ */
-        .mm-content { position:relative; z-index:2; padding:22px 26px 60px; }
-
-        /* ══ TOPBAR ══ */
-        .mm-topbar {
-          display:flex; align-items:center; justify-content:space-between;
-          padding:10px 18px;
-          background:rgba(255,255,255,0.04);
-          border:1px solid rgba(255,255,255,0.08);
-          border-radius:10px; backdrop-filter:blur(20px);
-          margin-bottom:22px; position:relative; overflow:hidden;
-          opacity:0; animation:mmup 0.5s ease forwards 0.05s;
+        /* ── TOPBAR ── */
+        .sh-topbar {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 16px;
+          height: 44px;
+          background: #12151a;
+          border-bottom: 1px solid rgba(255,255,255,0.07);
+          position: sticky; top: 0; z-index: 100;
         }
-        .mm-topbar::before { content:''; position:absolute; top:0; left:20px; right:20px; height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent); }
+        .sh-topbar-left { display: flex; align-items: center; gap: 0; }
+        .sh-breadcrumb { font-family: 'Space Mono', monospace; font-size: 10px; color: rgba(16,185,129,0.4); letter-spacing: 0.14em; text-transform: uppercase; text-decoration: none; transition: color 0.2s; }
+        .sh-breadcrumb:hover { color: rgba(16,185,129,0.8); }
+        .sh-sep { font-size: 11px; color: rgba(255,255,255,0.15); margin: 0 8px; }
+        .sh-filetitle { font-family: 'Space Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.6); letter-spacing: 0.1em; }
+        .sh-topbar-actions { display: flex; align-items: center; gap: 8px; }
 
-        .mm-back {
-          display:flex; align-items:center; gap:8px;
-          font-family:'Space Mono',monospace; font-size:10px;
-          color:rgba(16,185,129,0.45); letter-spacing:0.14em; text-transform:uppercase;
-          text-decoration:none; transition:color 0.2s;
+        .sh-status-chip {
+          padding: 4px 12px; border-radius: 3px; cursor: pointer;
+          font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+          letter-spacing: 0.14em; text-transform: uppercase; transition: all 0.15s; border: none;
         }
-        .mm-back:hover { color:rgba(16,185,129,0.85); }
-
-        .mm-back-arr { font-size:13px; transition:transform 0.2s; }
-        .mm-back:hover .mm-back-arr { transform:translateX(-3px); }
-
-        .mm-topbar-right { display:flex; align-items:center; gap:10px; }
-
-        .mm-add-btn {
-          display:inline-flex; align-items:center; gap:7px;
-          padding:8px 18px; border-radius:6px;
-          background:#10b981; color:#021a0e;
-          font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:600;
-          letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; border:none;
-          position:relative; overflow:hidden;
-          transition:background 0.2s, transform 0.15s, box-shadow 0.2s;
-          box-shadow:0 4px 18px rgba(16,185,129,0.3);
+        .sh-icon-btn {
+          padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif;
+          font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; border: none;
+          background: rgba(255,255,255,0.06); color: rgba(220,230,225,0.65);
+          border: 1px solid rgba(255,255,255,0.1); transition: all 0.15s; white-space: nowrap;
         }
-        .mm-add-btn::after { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent); transition:left 0.4s; }
-        .mm-add-btn:hover::after { left:160%; }
-        .mm-add-btn:hover { background:#0ecf8e; transform:translateY(-2px); box-shadow:0 8px 26px rgba(16,185,129,0.4); }
-        .mm-add-btn:disabled { opacity:0.45; cursor:not-allowed; transform:none; box-shadow:none; }
+        .sh-icon-btn:hover { background: rgba(255,255,255,0.1); color: #e2e8e4; }
+        .sh-icon-btn.primary { background: #10b981; color: #021a0e; border-color: #10b981; }
+        .sh-icon-btn.primary:hover { background: #0ecf8e; }
+        .sh-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        /* ══ MATCH HEADER ══ */
-        .mm-header {
-          display:flex; align-items:flex-start; justify-content:space-between;
-          margin-bottom:24px;
-          opacity:0; animation:mmup 0.6s ease forwards 0.12s;
+        /* ── SHEET TOOLBAR ── */
+        .sh-toolbar {
+          display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+          padding: 7px 14px;
+          background: #0f1217;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
         }
-
-        .mm-eyebrow { font-family:'Space Mono',monospace; font-size:10px; color:rgba(16,185,129,0.4); letter-spacing:0.22em; text-transform:uppercase; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
-        .mm-eyebrow::before { content:''; width:22px; height:1px; background:rgba(16,185,129,0.38); display:block; }
-
-        .mm-title { font-family:'Rajdhani',sans-serif; font-size:44px; font-weight:700; line-height:0.9; letter-spacing:0.04em; text-transform:uppercase; color:#fff; }
-        .mm-title span { color:#10b981; text-shadow:0 0 28px rgba(16,185,129,0.45); }
-
-        .mm-meta { display:flex; align-items:center; gap:12px; margin-top:8px; }
-        .mm-meta-item { font-family:'Space Mono',monospace; font-size:9px; color:rgba(160,200,175,0.4); letter-spacing:0.12em; text-transform:uppercase; }
-        .mm-meta-sep { width:3px; height:3px; border-radius:50%; background:rgba(16,185,129,0.25); }
-
-        /* Status buttons */
-        .mm-status-row { display:flex; gap:8px; margin-top:14px; }
-
-        .mm-status-btn {
-          padding:6px 16px; border-radius:4px; border:none; cursor:pointer;
-          font-family:'Space Mono',monospace; font-size:9px; font-weight:700;
-          letter-spacing:0.14em; text-transform:uppercase; transition:all 0.2s;
-          backdrop-filter:blur(8px);
+        .sh-toolbar-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 4px; }
+        .sh-toolbar-btn {
+          padding: 4px 10px; border-radius: 3px; cursor: pointer; border: none;
+          background: transparent; color: rgba(220,230,225,0.55);
+          font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+          transition: all 0.15s; white-space: nowrap;
         }
+        .sh-toolbar-btn:hover { background: rgba(255,255,255,0.07); color: #e2e8e4; }
+        .sh-toolbar-btn.danger { color: rgba(232,64,64,0.7); }
+        .sh-toolbar-btn.danger:hover { background: rgba(232,64,64,0.1); color: #e84040; }
+        .sh-toolbar-btn.success { color: rgba(16,185,129,0.7); }
+        .sh-toolbar-btn.success:hover { background: rgba(16,185,129,0.1); color: #10b981; }
+        .sh-toolbar-btn.gold { color: rgba(245,200,66,0.7); }
+        .sh-toolbar-btn.gold:hover { background: rgba(245,200,66,0.1); color: #f5c842; }
 
-        .mm-status-btn.inactive { background:rgba(255,255,255,0.05); color:rgba(160,180,170,0.45); border:1px solid rgba(255,255,255,0.08); }
-        .mm-status-btn.inactive:hover { background:rgba(255,255,255,0.09); color:rgba(200,220,210,0.7); }
-        .mm-status-btn.s-waiting  { background:rgba(245,200,66,0.15); color:#f5c842; border:1px solid rgba(245,200,66,0.35); box-shadow:0 0 14px rgba(245,200,66,0.15); }
-        .mm-status-btn.s-live     { background:rgba(232,64,64,0.15); color:#e84040; border:1px solid rgba(232,64,64,0.35); box-shadow:0 0 14px rgba(232,64,64,0.2); }
-        .mm-status-btn.s-finished { background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.3); box-shadow:0 0 14px rgba(16,185,129,0.12); }
+        .sh-ov-btn {
+          padding: 4px 10px; border-radius: 3px; cursor: pointer; border: none;
+          font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+          transition: all 0.15s;
+        }
+        .sh-ov-on  { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+        .sh-ov-off { background: rgba(255,255,255,0.04); color: rgba(180,200,190,0.4); border: 1px solid rgba(255,255,255,0.08); }
+        .sh-ov-on:hover  { background: rgba(16,185,129,0.25); }
+        .sh-ov-off:hover { background: rgba(255,255,255,0.08); color: rgba(220,235,228,0.7); }
 
-        .mm-live-pulse { display:inline-block; width:7px; height:7px; border-radius:50%; background:#e84040; margin-right:5px; animation:livep 1.2s ease-in-out infinite; box-shadow:0 0 8px rgba(232,64,64,0.8); }
-        @keyframes livep { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
+        /* ── LAYOUT ── */
+        .sh-body { display: flex; height: calc(100vh - 88px); overflow: hidden; }
+        .sh-main { flex: 1; overflow: auto; }
+        .sh-sidebar { width: 260px; flex-shrink: 0; border-left: 1px solid rgba(255,255,255,0.07); overflow-y: auto; background: #0d1014; }
 
-        /* ══ OVERLAY CONTROLS ══ */
-        .mm-overlay-panel {
-          position:relative; overflow:hidden;
-          background:rgba(255,255,255,0.045);
-          border:1px solid rgba(255,255,255,0.1);
-          border-radius:14px; padding:20px 22px;
-          backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
-          box-shadow:0 4px 28px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
-          margin-bottom:28px;
-          opacity:0; animation:mmup 0.5s ease forwards 0.2s;
+        /* ── SPREADSHEET TABLE ── */
+        .sh-table-wrap { min-width: 100%; }
+        table.sh-table { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 13px; }
+
+        /* Col header row */
+        .sh-col-hd {
+          position: sticky; top: 0; z-index: 10;
+          background: #12151a;
+          border-bottom: 2px solid rgba(16,185,129,0.2);
+        }
+        .sh-col-hd th {
+          padding: 8px 10px; text-align: left;
+          font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+          color: rgba(16,185,129,0.4); letter-spacing: 0.2em; text-transform: uppercase;
+          border-right: 1px solid rgba(255,255,255,0.05);
+          white-space: nowrap; user-select: none;
+        }
+        .sh-col-hd th:first-child { width: 36px; background: #10151a; }
+        .sh-col-hd th.center { text-align: center; }
+
+        /* Row number column */
+        .sh-rownum {
+          width: 36px; text-align: center;
+          font-family: 'Space Mono', monospace; font-size: 9px;
+          color: rgba(255,255,255,0.18); background: #10151a;
+          border-right: 1px solid rgba(255,255,255,0.07);
+          user-select: none; cursor: default;
         }
 
-        .mm-overlay-panel::before { content:''; position:absolute; top:0; left:18px; right:18px; height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent); }
+        /* Team header row */
+        .sh-team-row {
+          background: #141820;
+          border-top: 2px solid rgba(16,185,129,0.12);
+        }
+        .sh-team-row td {
+          padding: 8px 10px; border-right: 1px solid rgba(255,255,255,0.04);
+        }
+        .sh-team-name-cell {
+          font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 700;
+          color: #fff; letter-spacing: 0.04em; text-transform: uppercase;
+          cursor: pointer; user-select: none;
+          display: flex; align-items: center; gap: 8px;
+        }
+        .sh-team-name-cell .pencil { font-size: 11px; opacity: 0.3; transition: opacity 0.2s; }
+        .sh-team-name-cell:hover .pencil { opacity: 0.7; }
 
-        /* Orb inside overlay panel */
-        .mm-overlay-orb { position:absolute; width:200px; height:200px; border-radius:50%; background:radial-gradient(circle,rgba(6,182,212,0.12) 0%,transparent 70%); top:-80px; right:-60px; filter:blur(40px); pointer-events:none; }
+        /* Player data rows */
+        .sh-player-row { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s; }
+        .sh-player-row:hover { background: rgba(255,255,255,0.025); }
+        .sh-player-row.selected { background: rgba(16,185,129,0.06); }
+        .sh-player-row.dead-row { opacity: 0.5; }
+        .sh-player-row td { padding: 0; border-right: 1px solid rgba(255,255,255,0.04); }
 
-        .mm-overlay-title { font-family:'Space Mono',monospace; font-size:10px; color:rgba(16,185,129,0.45); letter-spacing:0.18em; text-transform:uppercase; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
-        .mm-overlay-title::before { content:''; width:16px; height:1px; background:rgba(16,185,129,0.35); display:block; }
+        .sh-cell {
+          padding: 7px 10px; min-height: 36px; display: flex; align-items: center;
+          cursor: cell; user-select: none; min-width: 0;
+        }
+        .sh-cell.editing { padding: 0; }
+        .sh-cell input {
+          width: 100%; height: 36px; padding: 0 10px;
+          background: rgba(16,185,129,0.1); border: 2px solid #10b981;
+          color: #e2e8e4; font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600;
+          outline: none; letter-spacing: 0.04em;
+        }
+        .sh-cell input[type="number"] { text-align: center; font-family: 'Space Mono', monospace; font-size: 13px; }
 
-        .mm-overlay-row { display:flex; flex-wrap:wrap; gap:20px; }
+        .sh-kills-val {
+          font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700;
+          color: #10b981; text-align: center; width: 100%; cursor: pointer;
+        }
+        .sh-kills-val:hover { color: #5fffd4; }
 
-        .mm-ov-group { display:flex; flex-direction:column; gap:6px; }
-        .mm-ov-lbl { font-family:'Space Mono',monospace; font-size:9px; color:rgba(160,200,175,0.35); letter-spacing:0.15em; text-transform:uppercase; }
-        .mm-ov-btns { display:flex; gap:6px; }
+        /* Status cells */
+        .sh-alive-pill {
+          display: inline-flex; align-items: center; justify-content: center;
+          padding: 3px 10px; border-radius: 3px; cursor: pointer;
+          font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+          transition: all 0.15s; border: none; white-space: nowrap;
+        }
+        .sh-alive-pill.alive { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+        .sh-alive-pill.alive:hover { background: rgba(232,64,64,0.15); color: #e84040; border-color: rgba(232,64,64,0.3); }
+        .sh-alive-pill.dead { background: rgba(232,64,64,0.1); color: #e84040; border: 1px solid rgba(232,64,64,0.25); }
+        .sh-alive-pill.dead:hover { background: rgba(16,185,129,0.15); color: #10b981; border-color: rgba(16,185,129,0.3); }
 
-        .mm-ov-btn {
-          padding:7px 14px; border-radius:5px; cursor:pointer;
-          font-family:'Barlow Condensed',sans-serif; font-size:12px; font-weight:600;
-          letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s; border:none;
+        /* Team summary cells */
+        .sh-team-total {
+          font-family: 'Space Mono', monospace; font-size: 15px; font-weight: 700;
+          color: #10b981; text-align: center;
+        }
+        .sh-team-alive-bar {
+          display: flex; align-items: center; gap: 4px;
+        }
+        .sh-bar { height: 6px; flex: 1; border-radius: 2px; }
+        .sh-bar.alive { background: #10b981; }
+        .sh-bar.dead { background: rgba(255,255,255,0.1); }
+
+        /* Booyah button */
+        .sh-booyah-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 5px 14px; border-radius: 3px; cursor: pointer; border: none;
+          background: rgba(245,200,66,0.1); color: #f5c842;
+          border: 1px solid rgba(245,200,66,0.28);
+          font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
+          letter-spacing: 0.1em; text-transform: uppercase; transition: all 0.2s; white-space: nowrap;
+        }
+        .sh-booyah-btn:hover { background: rgba(245,200,66,0.2); border-color: rgba(245,200,66,0.5); box-shadow: 0 0 16px rgba(245,200,66,0.15); }
+        .sh-booyah-btn.declared { background: rgba(245,200,66,0.25); color: #f5c842; }
+
+        /* Team action buttons */
+        .sh-team-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .sh-team-act-btn {
+          padding: 4px 10px; border-radius: 3px; cursor: pointer; border: none;
+          font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 700;
+          letter-spacing: 0.1em; text-transform: uppercase; transition: all 0.15s;
         }
 
-        .mm-ov-btn.active { background:#10b981; color:#021a0e; box-shadow:0 0 14px rgba(16,185,129,0.35); }
-        .mm-ov-btn.inactive { background:rgba(255,255,255,0.05); color:rgba(160,180,170,0.5); border:1px solid rgba(255,255,255,0.08); }
-        .mm-ov-btn.inactive:hover { background:rgba(255,255,255,0.09); color:#e8f4ee; }
-
-        .mm-ov-btn.vis  { background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.28); }
-        .mm-ov-btn.vis:hover { background:rgba(16,185,129,0.2); }
-        .mm-ov-btn.hid  { background:rgba(232,64,64,0.1); color:#e84040; border:1px solid rgba(232,64,64,0.25); }
-        .mm-ov-btn.hid:hover { background:rgba(232,64,64,0.18); }
-
-        .mm-ov-btn.copy { background:rgba(59,130,246,0.1); color:#60a5fa; border:1px solid rgba(59,130,246,0.25); }
-        .mm-ov-btn.copy:hover { background:rgba(59,130,246,0.18); }
-        .mm-ov-btn.copied { background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3); }
-
-        /* ══ TEAMS GRID ══ */
-        .mm-teams-grid {
-          display:grid; grid-template-columns:repeat(2,1fr); gap:16px;
-          margin-bottom:36px;
+        /* SIDEBAR */
+        .sh-sidebar-section { padding: 14px 14px 0; }
+        .sh-sidebar-title {
+          font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+          color: rgba(16,185,129,0.38); letter-spacing: 0.2em; text-transform: uppercase;
+          margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
         }
+        .sh-sidebar-title::before { content: ''; width: 12px; height: 1px; background: rgba(16,185,129,0.3); display: block; }
 
-        /* ══ TEAM CARD ══ */
-        .mm-team-card {
-          position:relative; overflow:hidden;
-          background:rgba(255,255,255,0.05);
-          border:1px solid rgba(255,255,255,0.1);
-          border-radius:16px; padding:20px 20px 18px;
-          backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
-          box-shadow:0 6px 36px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.09);
-          transition:border-color 0.25s, box-shadow 0.25s;
-          opacity:0; animation:mmup 0.5s ease forwards;
+        .sh-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .sh-stat-lbl { font-family: 'Space Mono', monospace; font-size: 9px; color: rgba(180,200,190,0.35); letter-spacing: 0.1em; }
+        .sh-stat-val { font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700; color: #10b981; }
+        .sh-stat-val.red { color: #e84040; }
+        .sh-stat-val.yellow { color: #f5c842; }
+
+        /* Log */
+        .sh-log-item { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); align-items: flex-start; }
+        .sh-log-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+        .sh-log-msg { font-size: 11px; color: rgba(200,220,210,0.7); line-height: 1.4; flex: 1; }
+        .sh-log-time { font-family: 'Space Mono', monospace; font-size: 9px; color: rgba(180,200,190,0.25); flex-shrink: 0; margin-top: 2px; }
+
+        /* Toast */
+        .sh-toast {
+          position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+          padding: 10px 22px; border-radius: 6px; z-index: 999;
+          font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+          letter-spacing: 0.12em; text-transform: uppercase;
+          animation: toastin 0.25s ease;
+          backdrop-filter: blur(12px);
         }
+        .sh-toast.success { background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.35); }
+        .sh-toast.danger { background: rgba(232,64,64,0.2); color: #e84040; border: 1px solid rgba(232,64,64,0.35); }
+        @keyframes toastin { from { opacity:0; transform:translateX(-50%) translateY(10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
 
-        .mm-team-card::before { content:''; position:absolute; top:0; left:18px; right:18px; height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent); }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-        .mm-team-card:hover { border-color:rgba(16,185,129,0.22); box-shadow:0 10px 44px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1); }
-
-        /* Ghost slot watermark */
-        .mm-slot-wm {
-          position:absolute; right:-8px; bottom:-20px;
-          font-family:'Rajdhani',sans-serif; font-size:110px; font-weight:700;
-          color:rgba(16,185,129,0.045); line-height:1; pointer-events:none;
-          letter-spacing:-0.04em; user-select:none;
-        }
-
-        /* Inner aurora orb per card — unique per index via inline style */
-        .mm-card-orb {
-          position:absolute; width:160px; height:160px; border-radius:50%;
-          top:-60px; right:-40px; filter:blur(36px); pointer-events:none;
-        }
-
-        /* ── TEAM HEADER ── */
-        .mm-team-hd { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; position:relative; z-index:1; }
-
-        .mm-team-hd-left { display:flex; flex-direction:column; gap:4px; }
-
-        .mm-slot-badge { font-family:'Space Mono',monospace; font-size:9px; color:rgba(16,185,129,0.38); letter-spacing:0.18em; text-transform:uppercase; }
-
-        .mm-team-name-btn {
-          background:none; border:none; cursor:pointer; padding:0;
-          font-family:'Rajdhani',sans-serif; font-size:22px; font-weight:700;
-          color:#fff; letter-spacing:0.04em; text-transform:uppercase;
-          transition:color 0.2s; text-align:left;
-          display:flex; align-items:center; gap:8px;
-        }
-
-        .mm-team-name-btn:hover { color:#10b981; }
-
-        .mm-edit-icon { font-size:13px; opacity:0.4; transition:opacity 0.2s; }
-        .mm-team-name-btn:hover .mm-edit-icon { opacity:0.8; }
-
-        /* Inline name edit */
-        .mm-name-edit { display:flex; align-items:center; gap:8px; }
-        .mm-name-input {
-          background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.4);
-          border-radius:4px; padding:5px 10px; color:#e8f4ee;
-          font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700;
-          letter-spacing:0.04em; width:140px; outline:none;
-          box-shadow:0 0 12px rgba(16,185,129,0.1);
-        }
-
-        .mm-save-btn { background:none; border:none; cursor:pointer; color:#10b981; font-family:'Space Mono',monospace; font-size:10px; letter-spacing:0.1em; padding:0; transition:color 0.2s; }
-        .mm-save-btn:hover { color:#5fffd4; }
-        .mm-cancel-btn { background:none; border:none; cursor:pointer; color:rgba(232,64,64,0.6); font-family:'Space Mono',monospace; font-size:10px; padding:0; transition:color 0.2s; }
-        .mm-cancel-btn:hover { color:#e84040; }
-
-        /* Kill count */
-        .mm-kills {
-          display:flex; flex-direction:column; align-items:flex-end; gap:2px;
-        }
-
-        .mm-kills-val {
-          font-family:'Space Mono',monospace; font-size:22px; font-weight:700;
-          color:#10b981; text-shadow:0 0 18px rgba(16,185,129,0.5);
-          line-height:1;
-        }
-
-        .mm-kills-lbl { font-family:'Space Mono',monospace; font-size:8px; color:rgba(16,185,129,0.3); letter-spacing:0.14em; text-transform:uppercase; }
-
-        /* ── ALIVE BARS ── */
-        .mm-bars { display:flex; gap:5px; margin-bottom:14px; position:relative; z-index:1; }
-
-        .mm-bar {
-          height:5px; flex:1; border-radius:3px; transition:all 0.3s;
-        }
-
-        .mm-bar.alive { background:#10b981; box-shadow:0 0 8px rgba(16,185,129,0.6); }
-        .mm-bar.dead  { background:rgba(255,255,255,0.08); }
-
-        /* ── PLAYERS ── */
-        .mm-players { display:flex; flex-direction:column; gap:8px; position:relative; z-index:1; }
-
-        .mm-player-row {
-          display:flex; align-items:center; gap:10px;
-          padding:8px 12px; border-radius:8px;
-          background:rgba(255,255,255,0.03);
-          border:1px solid rgba(255,255,255,0.06);
-          transition:all 0.2s;
-        }
-
-        .mm-player-row.alive-row:hover { background:rgba(16,185,129,0.05); border-color:rgba(16,185,129,0.15); }
-        .mm-player-row.dead-row { opacity:0.5; }
-
-        .mm-pname {
-          font-family:'Rajdhani',sans-serif; font-size:16px; font-weight:700;
-          letter-spacing:0.04em; min-width:28px; flex-shrink:0;
-        }
-
-        .mm-pname.alive { color:#fff; }
-        .mm-pname.dead  { color:rgba(160,180,170,0.4); text-decoration:line-through; }
-
-        /* Kill input */
-        .mm-kills-input {
-          width:48px; text-align:center; padding:5px 4px;
-          background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.2);
-          border-radius:5px; color:#10b981;
-          font-family:'Space Mono',monospace; font-size:13px; font-weight:700;
-          outline:none; transition:all 0.2s; flex-shrink:0;
-        }
-
-        .mm-kills-input:focus { border-color:rgba(16,185,129,0.55); background:rgba(16,185,129,0.1); box-shadow:0 0 10px rgba(16,185,129,0.12); }
-        .mm-kills-input:disabled { background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.06); color:rgba(160,180,170,0.25); cursor:not-allowed; }
-
-        /* Elim / revive button */
-        .mm-elim-btn {
-          flex:1; padding:6px 10px; border-radius:5px; border:none; cursor:pointer;
-          font-family:'Barlow Condensed',sans-serif; font-size:12px; font-weight:600;
-          letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s;
-        }
-
-        .mm-elim-btn.elim { background:rgba(232,64,64,0.12); color:#e84040; border:1px solid rgba(232,64,64,0.25); }
-        .mm-elim-btn.elim:hover { background:rgba(232,64,64,0.22); border-color:rgba(232,64,64,0.45); box-shadow:0 0 12px rgba(232,64,64,0.2); }
-
-        .mm-elim-btn.revive { background:rgba(245,200,66,0.1); color:#f5c842; border:1px solid rgba(245,200,66,0.22); }
-        .mm-elim-btn.revive:hover { background:rgba(245,200,66,0.18); border-color:rgba(245,200,66,0.4); }
-
-        /* Winner button */
-        .mm-winner-btn {
-          width:100%; margin-top:14px; padding:11px 16px;
-          background:rgba(245,200,66,0.1); color:#f5c842;
-          border:1px solid rgba(245,200,66,0.28); border-radius:8px;
-          font-family:'Rajdhani',sans-serif; font-size:16px; font-weight:700;
-          letter-spacing:0.1em; text-transform:uppercase; cursor:pointer;
-          transition:all 0.2s; position:relative; z-index:1;
-          backdrop-filter:blur(8px);
-          display:flex; align-items:center; justify-content:center; gap:8px;
-        }
-
-        .mm-winner-btn:hover { background:rgba(245,200,66,0.18); border-color:rgba(245,200,66,0.5); box-shadow:0 0 22px rgba(245,200,66,0.18); transform:translateY(-1px); }
-
-        /* Trophy icon */
-        .mm-trophy { font-size:15px; }
-
-        /* ══ ACTIVITY LOG ══ */
-        .mm-log-section {
-          opacity:0; animation:mmup 0.6s ease forwards 0.5s;
-        }
-
-        .mm-log-head {
-          display:flex; align-items:center; gap:10px; margin-bottom:14px;
-        }
-
-        .mm-log-title { font-family:'Rajdhani',sans-serif; font-size:24px; font-weight:700; color:#fff; letter-spacing:0.06em; text-transform:uppercase; }
-        .mm-log-accent { color:#10b981; text-shadow:0 0 20px rgba(16,185,129,0.4); }
-
-        .mm-log-wrap {
-          position:relative; overflow:hidden;
-          background:rgba(255,255,255,0.04);
-          border:1px solid rgba(255,255,255,0.09);
-          border-radius:14px; padding:20px 22px;
-          backdrop-filter:blur(20px);
-          box-shadow:0 4px 28px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.07);
-        }
-
-        .mm-log-wrap::before { content:''; position:absolute; top:0; left:18px; right:18px; height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.14),transparent); }
-
-        /* ── KEYFRAMES ── */
-        @keyframes mmup {
-          from { opacity:0; transform:translateY(16px); }
-          to   { opacity:1; transform:translateY(0); }
-        }
-
-        @keyframes spin { to { transform:rotate(360deg); } }
-
-        /* Responsive */
-        @media (max-width:900px) {
-          .mm-content { padding:16px 14px 48px; }
-          .mm-teams-grid { grid-template-columns:1fr; }
-          .mm-header { flex-direction:column; gap:14px; }
-          .mm-title { font-size:34px; }
+        @media (max-width: 900px) {
+          .sh-body { flex-direction: column; height: auto; }
+          .sh-sidebar { width: 100%; border-left: none; border-top: 1px solid rgba(255,255,255,0.07); }
         }
       `}</style>
 
-      <div className="mm-root">
-        {/* Background */}
-        <div className="mm-grid" />
-        <div className="mm-noise" />
-        <div className="mm-orb mm-o1" />
-        <div className="mm-orb mm-o2" />
-        <div className="mm-orb mm-o3" />
-        <div className="mm-orb mm-o4" />
-        <div className="mm-orb mm-o5" />
+      <div className="sh-root">
 
-        <div className="mm-content">
-
-          {/* ── TOPBAR ── */}
-          <div className="mm-topbar">
-            <Link href="/dashboard" className="mm-back">
-              <span className="mm-back-arr">←</span>
-              Back to Dashboard
-            </Link>
-            <div className="mm-topbar-right">
+        {/* ── TOPBAR ── */}
+        <div className="sh-topbar">
+          <div className="sh-topbar-left">
+            <Link href="/dashboard" className="sh-breadcrumb">Dashboard</Link>
+            <span className="sh-sep">/</span>
+            <span className="sh-filetitle">{match?.title || 'Match'} — Control Sheet</span>
+          </div>
+          <div className="sh-topbar-actions">
+            {['waiting', 'live', 'finished'].map(s => (
               <button
-                onClick={addTeam}
-                disabled={addingTeam}
-                className="mm-add-btn"
+                key={s}
+                onClick={() => updateMatchStatus(s)}
+                className="sh-status-chip"
+                style={{
+                  background: match?.status === s ? statusBg[s] : 'rgba(255,255,255,0.04)',
+                  color: match?.status === s ? statusColor[s] : 'rgba(180,200,190,0.35)',
+                  border: `1px solid ${match?.status === s ? statusColor[s] + '40' : 'rgba(255,255,255,0.08)'}`,
+                  boxShadow: match?.status === s && s === 'live' ? '0 0 12px rgba(232,64,64,0.2)' : 'none',
+                }}
               >
-                {addingTeam ? 'Adding...' : '+ Add Team'}
-              </button>
-            </div>
-          </div>
-
-          {/* ── MATCH HEADER ── */}
-          <div className="mm-header">
-            <div>
-              <div className="mm-eyebrow">Match Control</div>
-              <h1 className="mm-title">
-                {match?.title?.split(' ').map((word, i) =>
-                  i === match.title.split(' ').length - 1
-                    ? <span key={i}>{word}</span>
-                    : <span key={i} style={{ color: '#fff' }}>{word} </span>
+                {s === 'live' && match?.status === 'live' && (
+                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#e84040', marginRight: 5, animation: 'pulse 1.2s ease-in-out infinite', boxShadow: '0 0 6px #e84040' }} />
                 )}
-              </h1>
-              <div className="mm-meta">
-                <span className="mm-meta-item">{match?.map}</span>
-                <div className="mm-meta-sep" />
-                <span className="mm-meta-item">{match?.round}</span>
-                <div className="mm-meta-sep" />
-                <span className="mm-meta-item">{teams.length} teams</span>
-              </div>
-              <div className="mm-status-row">
-                {['waiting', 'live', 'finished'].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => updateMatchStatus(s)}
-                    className={`mm-status-btn ${match?.status === s ? `s-${s}` : 'inactive'}`}
-                  >
-                    {s === 'live' && match?.status === 'live' && <span className="mm-live-pulse" />}
-                    {s.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
+                {s}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)' }} />
+            <button onClick={addTeam} disabled={addingTeam} className="sh-icon-btn primary">
+              {addingTeam ? 'Adding…' : '+ Add Team'}
+            </button>
+            <button onClick={copyOverlayUrl} className="sh-icon-btn">
+              {copiedUrl ? '✓ Copied' : 'Copy Overlay URL'}
+            </button>
           </div>
-
-          {/* ── OVERLAY CONTROLS ── */}
-          <div className="mm-overlay-panel">
-            <div className="mm-overlay-orb" />
-            <div className="mm-overlay-title">Overlay Controls</div>
-            <div className="mm-overlay-row">
-
-              {/* Leaderboard mode */}
-              <div className="mm-ov-group">
-                <div className="mm-ov-lbl">Leaderboard Mode</div>
-                <div className="mm-ov-btns">
-                  <button
-                    onClick={() => updateOverlaySetting('leaderboard_mode', 'match')}
-                    className={`mm-ov-btn ${settings?.leaderboard_mode === 'match' || !settings ? 'active' : 'inactive'}`}
-                  >Match</button>
-                  <button
-                    onClick={() => updateOverlaySetting('leaderboard_mode', 'overall')}
-                    className={`mm-ov-btn ${settings?.leaderboard_mode === 'overall' ? 'active' : 'inactive'}`}
-                  >Overall</button>
-                </div>
-              </div>
-
-              {/* Show leaderboard */}
-              <div className="mm-ov-group">
-                <div className="mm-ov-lbl">Leaderboard</div>
-                <div className="mm-ov-btns">
-                  <button
-                    onClick={() => updateOverlaySetting('show_leaderboard', !settings?.show_leaderboard)}
-                    className={`mm-ov-btn ${settings?.show_leaderboard !== false ? 'vis' : 'hid'}`}
-                  >
-                    {settings?.show_leaderboard !== false ? 'Visible' : 'Hidden'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Show final 4 */}
-              <div className="mm-ov-group">
-                <div className="mm-ov-lbl">Final 4</div>
-                <div className="mm-ov-btns">
-                  <button
-                    onClick={() => updateOverlaySetting('show_final4', !settings?.show_final4)}
-                    className={`mm-ov-btn ${settings?.show_final4 !== false ? 'vis' : 'hid'}`}
-                  >
-                    {settings?.show_final4 !== false ? 'Visible' : 'Hidden'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Copy URL */}
-              <div className="mm-ov-group">
-                <div className="mm-ov-lbl">Overlay URL</div>
-                <div className="mm-ov-btns">
-                  <button
-                    onClick={copyOverlayUrl}
-                    className={`mm-ov-btn ${copiedUrl ? 'copied' : 'copy'}`}
-                  >
-                    {copiedUrl ? 'Copied!' : 'Copy URL'}
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* ── TEAMS ── */}
-          {teams.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'60px 20px', background:'rgba(255,255,255,0.03)', border:'1px dashed rgba(16,185,129,0.14)', borderRadius:14, marginBottom:28 }}>
-              <div style={{ fontFamily:"'Rajdhani',sans-serif", fontSize:32, fontWeight:700, color:'rgba(16,185,129,0.12)', letterSpacing:'0.1em' }}>NO TEAMS YET</div>
-              <div style={{ fontFamily:"'Space Mono',monospace", fontSize:10, color:'rgba(16,185,129,0.22)', letterSpacing:'0.16em', textTransform:'uppercase', marginTop:10 }}>Click "+ Add Team" to get started</div>
-            </div>
-          ) : (
-            <div className="mm-teams-grid">
-              {teams.map((team, i) => {
-                const orbColors = [
-                  'rgba(16,185,129,0.18)', 'rgba(124,58,237,0.16)',
-                  'rgba(6,182,212,0.16)', 'rgba(236,72,153,0.14)',
-                  'rgba(245,200,66,0.14)', 'rgba(16,185,129,0.16)',
-                ]
-                const orbColor = orbColors[i % orbColors.length]
-                const alive = aliveCount(team)
-                const total = team.players?.length || 4
-
-                return (
-                  <div
-                    key={team.id}
-                    className="mm-team-card"
-                    style={{ animationDelay: `${0.28 + i * 0.07}s` }}
-                  >
-                    {/* Inner orb */}
-                    <div className="mm-card-orb" style={{ background: `radial-gradient(circle, ${orbColor} 0%, transparent 70%)` }} />
-
-                    {/* Slot watermark */}
-                    <div className="mm-slot-wm">{String(team.slot_number).padStart(2, '0')}</div>
-
-                    {/* Header */}
-                    <div className="mm-team-hd">
-                      <div className="mm-team-hd-left">
-                        <div className="mm-slot-badge">Slot {team.slot_number}</div>
-
-                        {editingTeamId === team.id ? (
-                          <div className="mm-name-edit">
-                            <input
-                              value={editingName}
-                              onChange={e => setEditingName(e.target.value)}
-                              onKeyDown={e => e.key === 'Enter' && updateTeamName(team)}
-                              className="mm-name-input"
-                              autoFocus
-                            />
-                            <button onClick={() => updateTeamName(team)} className="mm-save-btn">Save</button>
-                            <button onClick={() => setEditingTeamId(null)} className="mm-cancel-btn">✕</button>
-                          </div>
-                        ) : (
-                          <button
-                            className="mm-team-name-btn"
-                            onClick={() => { setEditingTeamId(team.id); setEditingName(team.name) }}
-                          >
-                            {team.name}
-                            <span className="mm-edit-icon">✎</span>
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="mm-kills">
-                        <div className="mm-kills-val">{team.total_kills}</div>
-                        <div className="mm-kills-lbl">kills</div>
-                      </div>
-                    </div>
-
-                    {/* Alive bars */}
-                    <div className="mm-bars">
-                      {team.players?.map(p => (
-                        <div key={p.id} className={`mm-bar ${p.alive ? 'alive' : 'dead'}`} />
-                      ))}
-                      <span style={{ fontFamily:"'Space Mono',monospace", fontSize:9, color:'rgba(16,185,129,0.35)', letterSpacing:'0.1em', marginLeft:6, alignSelf:'center', whiteSpace:'nowrap' }}>
-                        {alive}/{total}
-                      </span>
-                    </div>
-
-                    {/* Players */}
-                    <div className="mm-players">
-                      {team.players?.map(player => (
-                        <div key={player.id} className={`mm-player-row ${player.alive ? 'alive-row' : 'dead-row'}`}>
-                          <span className={`mm-pname ${player.alive ? 'alive' : 'dead'}`}>
-                            {player.name}
-                          </span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="99"
-                            value={localKills[player.id] !== undefined ? localKills[player.id] : (player.kills || 0)}
-                            onChange={(e) => handleKillInput(player, team, e.target.value)}
-                          />  
-                          <button
-                            onClick={() => player.alive ? eliminatePlayer(player, team) : revivePlayer(player, team)}
-                            className={`mm-elim-btn ${player.alive ? 'elim' : 'revive'}`}
-                          >
-                            {player.alive ? 'Eliminate' : 'Revive'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Winner button */}
-                    <button onClick={() => declareWinner(team)} className="mm-winner-btn">
-                      <span className="mm-trophy">🏆</span>
-                      Declare Winner
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* ── ACTIVITY LOG ── */}
-          <div className="mm-log-section">
-            <div className="mm-log-head">
-              <h2 className="mm-log-title">
-                Activity <span className="mm-log-accent">Log</span>
-              </h2>
-            </div>
-            <div className="mm-log-wrap">
-              <ActivityLog matchId={id} />
-            </div>
-          </div>
-
         </div>
+
+        {/* ── TOOLBAR ── */}
+        <div className="sh-toolbar">
+          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: 'rgba(16,185,129,0.3)', letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+            {match?.map} · {match?.round} · {teams.length} teams
+          </span>
+          <div className="sh-toolbar-sep" />
+          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: 'rgba(180,200,190,0.3)', letterSpacing: '0.12em' }}>Overlay:</span>
+          <button onClick={() => updateOverlaySetting('show_leaderboard', !(settings?.show_leaderboard !== false))} className={`sh-ov-btn ${settings?.show_leaderboard !== false ? 'sh-ov-on' : 'sh-ov-off'}`}>
+            Leaderboard {settings?.show_leaderboard !== false ? 'ON' : 'OFF'}
+          </button>
+          <button onClick={() => updateOverlaySetting('show_final4', !(settings?.show_final4 !== false))} className={`sh-ov-btn ${settings?.show_final4 !== false ? 'sh-ov-on' : 'sh-ov-off'}`}>
+            Final4 {settings?.show_final4 !== false ? 'ON' : 'OFF'}
+          </button>
+          <button onClick={() => updateOverlaySetting('leaderboard_mode', settings?.leaderboard_mode === 'overall' ? 'match' : 'overall')} className="sh-ov-btn sh-ov-off">
+            Mode: {settings?.leaderboard_mode === 'overall' ? 'OVERALL' : 'MATCH'}
+          </button>
+        </div>
+
+        {/* ── BODY ── */}
+        <div className="sh-body">
+
+          {/* ── SPREADSHEET ── */}
+          <div className="sh-main">
+            <div className="sh-table-wrap">
+              <table className="sh-table">
+                <thead className="sh-col-hd">
+                  <tr>
+                    <th>#</th>
+                    <th style={{ minWidth: 160 }}>Team / Player</th>
+                    <th style={{ minWidth: 80 }} className="center">Kills</th>
+                    <th style={{ minWidth: 100 }} className="center">Status</th>
+                    <th style={{ minWidth: 100 }} className="center">Alive Count</th>
+                    <th style={{ minWidth: 120 }} className="center">Team Kills</th>
+                    <th style={{ minWidth: 180 }}>Team Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teams.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: '60px 20px', textAlign: 'center' }}>
+                        <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 28, fontWeight: 700, color: 'rgba(16,185,129,0.1)', letterSpacing: '0.1em' }}>NO TEAMS</div>
+                        <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'rgba(16,185,129,0.2)', letterSpacing: '0.14em', textTransform: 'uppercase', marginTop: 8 }}>Click "+ Add Team" in the top bar</div>
+                      </td>
+                    </tr>
+                  )}
+
+                  {teams.map((team, ti) => {
+                    const alive = aliveCount(team)
+                    const total = team.players?.length || 4
+                    const kills = teamKills(team)
+                    const isBooyah = booyahTeamId === team.id
+
+                    let rowNum = 1
+                    teams.slice(0, ti).forEach(t => { rowNum += (t.players?.length || 0) + 1 })
+
+                    return [
+                      /* Team row */
+                      <tr key={`team-${team.id}`} className="sh-team-row">
+                        <td className="sh-rownum" style={{ padding: '8px 0', verticalAlign: 'middle' }}>{rowNum}</td>
+
+                        {/* Team name — editable */}
+                        <td style={{ padding: 0 }}>
+                          {editingCell?.teamIdx === ti && editingCell?.field === 'teamName' ? (
+                            <div className="sh-cell editing">
+                              <input
+                                ref={inputRef}
+                                value={editingValue}
+                                onChange={e => setEditingValue(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit() }}
+                                onBlur={commitEdit}
+                              />
+                            </div>
+                          ) : (
+                            <div className="sh-cell" onDoubleClick={() => startEdit(ti, null, 'teamName', team.name)}>
+                              <span className="sh-team-name-cell">
+                                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: 'rgba(16,185,129,0.35)', letterSpacing: '0.14em', fontWeight: 400 }}>S{String(team.slot_number).padStart(2,'0')}</span>
+                                {team.name}
+                                <span className="pencil">✎</span>
+                              </span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Kills total */}
+                        <td style={{ textAlign: 'center', padding: '8px 10px' }}>
+                          <span className="sh-team-total">{kills}</span>
+                        </td>
+
+                        {/* Alive bar */}
+                        <td style={{ padding: '8px 10px' }}>
+                          <div className="sh-team-alive-bar">
+                            {Array.from({ length: total }, (_, i) => (
+                              <div key={i} className={`sh-bar ${i < alive ? 'alive' : 'dead'}`} />
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* Alive count */}
+                        <td style={{ textAlign: 'center', padding: '8px 10px' }}>
+                          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700, color: alive > 0 ? '#10b981' : 'rgba(232,64,64,0.6)' }}>
+                            {alive}/{total}
+                          </span>
+                        </td>
+
+                        {/* Team kills (same col) */}
+                        <td style={{ textAlign: 'center', padding: '8px 10px' }}>
+                          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'rgba(16,185,129,0.4)', letterSpacing: '0.1em' }}>TOTAL KILLS</span>
+                        </td>
+
+                        {/* Team actions */}
+                        <td style={{ padding: '6px 10px' }}>
+                          <div className="sh-team-actions">
+                            <button onClick={() => eliminateAllInTeam(team)} className="sh-team-act-btn" style={{ background: 'rgba(232,64,64,0.1)', color: '#e84040', border: '1px solid rgba(232,64,64,0.22)' }}>Elim All</button>
+                            <button onClick={() => reviveAllInTeam(team)} className="sh-team-act-btn" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.22)' }}>Revive All</button>
+                            <button onClick={() => declareBooyah(team)} className={`sh-booyah-btn ${isBooyah ? 'declared' : ''}`}>
+                              🏆 BOOYAH
+                            </button>
+                          </div>
+                        </td>
+                      </tr>,
+
+                      /* Player rows */
+                      ...(team.players || []).map((player, pi) => {
+                        const playerRow = rowNum + pi + 1
+                        const killVal = localKills[player.id] !== undefined ? localKills[player.id] : (player.kills || 0)
+                        const isEditingName = editingCell?.teamIdx === ti && editingCell?.playerIdx === pi && editingCell?.field === 'playerName'
+                        const isEditingKills = editingCell?.teamIdx === ti && editingCell?.playerIdx === pi && editingCell?.field === 'kills'
+
+                        return (
+                          <tr key={player.id} className={`sh-player-row ${!player.alive ? 'dead-row' : ''}`}>
+                            <td className="sh-rownum">{playerRow}</td>
+
+                            {/* Player name */}
+                            <td style={{ padding: 0, paddingLeft: 24 }}>
+                              {isEditingName ? (
+                                <div className="sh-cell editing">
+                                  <input
+                                    ref={inputRef}
+                                    value={editingValue}
+                                    onChange={e => setEditingValue(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit() }}
+                                    onBlur={commitEdit}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="sh-cell" onDoubleClick={() => startEdit(ti, pi, 'playerName', player.name)}>
+                                  <span style={{
+                                    fontSize: 14, fontWeight: 600, letterSpacing: '0.04em',
+                                    color: player.alive ? '#d8e8e0' : 'rgba(180,200,190,0.4)',
+                                    textDecoration: player.alive ? 'none' : 'line-through',
+                                    cursor: 'pointer',
+                                  }}>
+                                    {player.name}
+                                  </span>
+                                  <span style={{ fontSize: 9, color: 'rgba(16,185,129,0.2)', marginLeft: 6 }}>dbl-click to edit</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Kills */}
+                            <td style={{ padding: 0, textAlign: 'center' }}>
+                              {isEditingKills ? (
+                                <div className="sh-cell editing">
+                                  <input
+                                    ref={inputRef}
+                                    type="number" min="0" max="99"
+                                    value={editingValue}
+                                    onChange={e => setEditingValue(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') { handleKillInput(player, team, editingValue); cancelEdit() }
+                                      if (e.key === 'Escape') cancelEdit()
+                                    }}
+                                    onBlur={() => { handleKillInput(player, team, editingValue); cancelEdit() }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="sh-cell" style={{ justifyContent: 'center' }} onClick={() => startEdit(ti, pi, 'kills', killVal)}>
+                                  <span className="sh-kills-val">{killVal}</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Alive toggle */}
+                            <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                              <button onClick={() => toggleElim(player, team)} className={`sh-alive-pill ${player.alive ? 'alive' : 'dead'}`}>
+                                {player.alive ? '● ALIVE' : '✕ ELIM'}
+                              </button>
+                            </td>
+
+                            {/* Empty cells to align */}
+                            <td />
+                            <td />
+                            <td />
+                          </tr>
+                        )
+                      })
+                    ]
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── SIDEBAR ── */}
+          <div className="sh-sidebar">
+
+            {/* Match stats */}
+            <div className="sh-sidebar-section" style={{ paddingTop: 16 }}>
+              <div className="sh-sidebar-title">Match Stats</div>
+              {[
+                { lbl: 'Total Teams', val: teams.length, cls: '' },
+                { lbl: 'Teams Alive', val: teams.filter(t => t.players?.some(p => p.alive)).length, cls: 'success' },
+                { lbl: 'Total Kills', val: teams.reduce((s, t) => s + teamKills(t), 0), cls: '' },
+                { lbl: 'Status', val: match?.status?.toUpperCase() || '—', cls: match?.status === 'live' ? 'red' : '' },
+              ].map(r => (
+                <div key={r.lbl} className="sh-stat-row">
+                  <span className="sh-stat-lbl">{r.lbl}</span>
+                  <span className={`sh-stat-val ${r.cls}`}>{r.val}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '16px 0 0' }} />
+
+            {/* Team leaderboard preview */}
+            <div className="sh-sidebar-section" style={{ paddingTop: 14 }}>
+              <div className="sh-sidebar-title">Live Rankings</div>
+              {[...teams]
+                .sort((a, b) => teamKills(b) - teamKills(a))
+                .slice(0, 10)
+                .map((team, i) => (
+                  <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, fontWeight: 700, color: i === 0 ? '#f5c842' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : 'rgba(180,200,190,0.25)', width: 20, flexShrink: 0, textAlign: 'right' }}>
+                      {i + 1}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700, letterSpacing: '0.04em', color: '#d8e8e0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>
+                      {team.name}
+                    </span>
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, fontWeight: 700, color: '#10b981', flexShrink: 0 }}>
+                      {teamKills(team)}K
+                    </span>
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: aliveCount(team) > 0 ? 'rgba(16,185,129,0.5)' : 'rgba(232,64,64,0.5)', flexShrink: 0 }}>
+                      {aliveCount(team)}/{team.players?.length || 4}
+                    </span>
+                  </div>
+                ))}
+            </div>
+
+            <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '16px 0 0' }} />
+
+            {/* Activity log */}
+            <div className="sh-sidebar-section" style={{ paddingTop: 14, paddingBottom: 16 }}>
+              <div className="sh-sidebar-title">Activity Log</div>
+              {logs.length === 0 && (
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: 'rgba(180,200,190,0.2)', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '12px 0' }}>No activity yet</div>
+              )}
+              {logs.map(log => (
+                <div key={log.id} className="sh-log-item">
+                  <span className="sh-log-icon">
+                    {log.action === 'eliminated' ? '🔴' : log.action === 'kill_added' ? '🎯' : log.action === 'revived' ? '🟢' : log.action === 'winner' ? '🏆' : log.action === 'team_added' ? '➕' : '📝'}
+                  </span>
+                  <span className="sh-log-msg">{log.message}</span>
+                  <span className="sh-log-time">{new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
+
+        {/* Toast */}
+        {toast && <div className={`sh-toast ${toast.type}`}>{toast.msg}</div>}
       </div>
+
+      <style>{`
+        @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
+      `}</style>
     </>
   )
 }
