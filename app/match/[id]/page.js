@@ -47,7 +47,18 @@ export default function ManageMatch() {
   }
   async function fetchTeams() {
     const { data } = await supabase.from('teams').select('*, players(*)').eq('match_id', id).order('slot_number')
-    setTeams(data || [])
+
+    if (data) {
+      const sorted = data.map(team => ({
+        ...team,
+        players: [...(team.players || [])].sort((a, b) => 
+          a.name.localeCompare(b.name)
+        )
+      }))
+      setTeams(sorted)
+    }else {
+      setTeams([])
+    }
     setLoading(false)
   }
   async function fetchLogs() {
