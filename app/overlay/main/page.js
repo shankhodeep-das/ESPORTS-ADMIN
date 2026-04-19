@@ -289,7 +289,7 @@ function MainOverlayContent() {
               const totalPl = team.players?.length ?? 4
               const kills = team.total_kills || 0
               const winPct = totalKillsAlive > 0
-                ? ((kills + alivePl) / totalKillsAlive * 100).toFixed(3)
+                ? ((kills + alivePl) / totalKillsAlive * 100).toFixed(2)
                 : "0.0";
 
               const rankColors = ['#FFD700', '#C8C8C8', '#cd7f32', '#e05252']
@@ -358,7 +358,7 @@ function MainOverlayContent() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {/* Kills dakhabe final 4 ui */}
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                          <span style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.4)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS</span>
+                          <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.4)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS</span>
                           <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', fontFamily: "'Barlow Condensed',sans-serif" }}>{kills}</span>
                         </div>
                         {/* win and kills ka seperate korar dag */}
