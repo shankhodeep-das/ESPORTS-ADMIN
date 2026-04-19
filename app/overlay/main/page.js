@@ -393,7 +393,7 @@ function MainOverlayContent() {
                       {Array.from({ length: totalPl }, (_, i) => (
                         <div key={i} style={{
                           width: 6,
-                          height: i < alivePl ? 28 : 12,
+                          height: i < alivePl ? 28 : 28,
                           borderRadius: '2px 2px 1px 1px',
                           background: i < alivePl
                             ? `linear-gradient(180deg,${rc} 0%,${rc}80 100%)`
