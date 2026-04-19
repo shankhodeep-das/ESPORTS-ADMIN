@@ -269,63 +269,59 @@ function MainOverlayContent() {
         onMouseLeave={stopDrag}
       >
 
-        {/* ══ FINAL 4 — TOP BAR matching reference image ══ */}
+        {/* ══ FINAL 4 — TOP BAR ══ */}
         {showFinal4 && overlayState === 'final4' && (
           <div style={{
             position: 'absolute',
-            top: 0, left: 200, right: 200,
+            top: 10, left: 200, right: 200, // Added 10px top for a floating look
             zIndex: 100,
           }}>
-            {/* Main bar */}
+            {/* Main container: Now transparent with a gap */}
             <div style={{
               display: 'flex',
               alignItems: 'stretch',
-              gap: 10,
-              background: 'rgba(8,4,4,0.88)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              borderBottom: '2px solid rgba(192,57,43,0.6)',
               height: 56,
+              gap: 12, // The gap you created
+              background: 'transparent', // Make background transparent
             }}>
               {aliveTeams.map((team, index) => {
-                const alivePl = team.players?.filter(p => p.alive).length ?? 0
-                const totalPl = team.players?.length ?? 4
-                const kills = team.total_kills || 0
+              const alivePl = team.players?.filter(p => p.alive).length ?? 0
+              const totalPl = team.players?.length ?? 4
+              const kills = team.total_kills || 0
+              const winPct = totalKillsAlive > 0
+                ? Math.round((kills / totalKillsAlive) * 100)
+                : Math.round(100 / aliveTeams.length)
 
-                // Win% = (team kills / total kills of alive teams) * 100
-                // Adds up to 100% across all 4 teams
-                const winPct = totalKillsAlive > 0
-                  ? Math.round((kills / totalKillsAlive) * 100)
-                  : Math.round(100 / aliveTeams.length)
+              const rankColors = ['#FFD700', '#C8C8C8', '#cd7f32', '#e05252']
+              const rc = rankColors[index] || '#e05252'
 
-                const rankColors = ['#FFD700', '#C8C8C8', '#cd7f32', '#e05252']
-                const rc = rankColors[index] || '#e05252'
-                const isFirst = index === 0
-                const isLast = index === aliveTeams.length - 1
-
-                return (
-                  <div
-                    key={team.id}
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '0 12px',
-                      borderRight: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)',
-                      background: isFirst
-                        ? 'linear-gradient(90deg,rgba(60,40,0,0.4) 0%,transparent 100%)'
-                        : 'transparent',
-                      position: 'relative',
-                    }}
-                  >
-                    {/* Left rank accent line */}
-                    <div style={{
-                      position: 'absolute',
-                      left: 0, top: 0, bottom: 0,
-                      width: 3,
-                      background: rc,
-                    }}/>
+              return (
+                <div
+                  key={team.id}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '0 12px',
+                    position: 'relative',
+                    // Move background and blur HERE
+                    background: 'rgba(8,4,4,0.88)', 
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderRadius: '4px', // Optional: softens the edges of the cards
+                    // Add a subtle bottom border to the CARD ONLY if desired
+                    borderBottom: `2px solid ${rc}66`, 
+                  }}
+                >
+                  {/* Left rank accent line */}
+                  <div style={{
+                    position: 'absolute',
+                    left: 0, top: 0, bottom: 0,
+                    width: 3,
+                    background: rc,
+                    borderRadius: '4px 0 0 4px'
+                  }}/>
 
                     {/* Team logo placeholder */}
                     <div style={{
