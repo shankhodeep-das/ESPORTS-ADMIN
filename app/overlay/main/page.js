@@ -289,8 +289,8 @@ function MainOverlayContent() {
               const totalPl = team.players?.length ?? 4
               const kills = team.total_kills || 0
               const winPct = totalKillsAlive > 0
-                ? Math.round(((kills + alivePl) / totalKillsAlive) * 100)
-                : Math.round(100 / aliveTeams.length)
+                ? ((kills + alivePl) / totalKillsAlive) * 100).toFixed(1)
+                : 0.0;
 
               const rankColors = ['#FFD700', '#C8C8C8', '#cd7f32', '#e05252']
               const rc = rankColors[index] || '#e05252'
@@ -376,6 +376,7 @@ function MainOverlayContent() {
                             fontFamily: "'Barlow Condensed',sans-serif",
                             fontSize: 13, fontWeight: 900,
                             color: rc,
+                            fontVariantNumeric: 'tabular-nums',
                             letterSpacing: '0.5px',
                           }}>{winPct}%</span>
                         </div>
