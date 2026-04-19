@@ -216,6 +216,9 @@ function MainOverlayContent() {
     })
 
   useEffect(() => {
+    const totalAlivePlayers = teams.reduce((sum,t) =>
+      sum + (t.players?.filter(p => p.alive).length || 0), 0
+    )
     const currentIds = aliveTeams.map(t => t.id)
     const prevIds = prevOrderRef.current
     if (prevIds.length > 0) {
@@ -497,7 +500,7 @@ function MainOverlayContent() {
                       </span>
                       <div style={{ flex: 1, height: '1px', background: `linear-gradient(90deg, ${rc}50, transparent)` }}/>
                       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: rc, background: `${rc}15`, padding: '1px 6px', border: `1px solid ${rc}30`, clipPath: 'polygon(4px 0%,100% 0%,calc(100% - 4px) 100%,0% 100%)' }}>
-                        {totalPl > 0 ? Math.round((alivePl / totalPl)*100):0}%
+                        {totalAlivePlayers > 0 ? Math.round((team.total_kills / totalAlivePlayers)*100):0}%
                       </span>
                     </div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: index === 0 ? 22 : 19, fontWeight: 900, letterSpacing: '2px', textTransform: 'uppercase', color: index === 0 ? '#fff8e1' : '#f0ece0', lineHeight: 1, marginBottom: '8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
