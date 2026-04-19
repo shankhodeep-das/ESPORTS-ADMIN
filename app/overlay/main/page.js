@@ -289,8 +289,8 @@ function MainOverlayContent() {
               const totalPl = team.players?.length ?? 4
               const kills = team.total_kills || 0
               const winPct = totalKillsAlive > 0
-                ? ((kills + alivePl) / totalKillsAlive) * 100).toFixed(1)
-                : 0.0;
+                ? ((kills + alivePl) / totalKillsAlive * 100).toFixed(1)
+                : "0.0";
 
               const rankColors = ['#FFD700', '#C8C8C8', '#cd7f32', '#e05252']
               const rc = rankColors[index] || '#e05252'
