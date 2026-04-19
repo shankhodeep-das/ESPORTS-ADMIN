@@ -463,10 +463,36 @@ function MainOverlayContent() {
                       {isElim ? (
                         <span style={{ fontSize:8, fontWeight:800, letterSpacing:'2px', color:'#ff4444', border:'1px solid rgba(255,60,60,0.3)', padding:'1px 5px', background:'rgba(255,0,0,0.07)', fontFamily:"'Barlow Condensed',sans-serif" }}>ELIM</span>
                       ) : (
-                        <div className="flex items-center gap-[3px]">
-                          {Array.from({length:totalPlayers},(_,i) => (
-                            <div key={i} style={{ width:6, height:6, borderRadius:'50%', background:i<alivePlayers?(getRankColor(rank)==='rgba(180,190,210,0.5)'?'#e8c96a':getRankColor(rank)):'rgba(255,255,255,0.1)' }}/>
-                          ))}
+                        <div className="flex items-center justify-center pr-1">
+                          {isElim ? (
+                            <span style={{ 
+                              fontSize: 8, fontWeight: 800, letterSpacing: '2px', 
+                              color: '#ff4444', border: '1px solid rgba(255,60,60,0.3)', 
+                              padding: '1px 5px', background: 'rgba(255,0,0,0.07)', 
+                              fontFamily: "'Barlow Condensed',sans-serif" 
+                            }}>ELIM</span>
+                          ) : (
+                            /* ══ REPLACED WITH VERTICAL BARS ══ */
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'flex-end',
+                              gap: 2, // Slightly tighter for the leaderboard
+                              height: 14, // Scaled down height to fit the row
+                            }}>
+                              {Array.from({ length: totalPlayers }, (_, i) => (
+                                <div key={i} style={{
+                                  width: 4, // Slimmer for the leaderboard
+                                  height: i < alivePlayers ? 14 : 6, // Alive bars are taller
+                                  borderRadius: '1px',
+                                  background: i < alivePlayers
+                                    ? (getRankColor(rank) === 'rgba(180,190,210,0.5)' ? '#e8c96a' : getRankColor(rank))
+                                    : 'rgba(255,255,255,0.1)',
+                                  transition: 'height 0.3s ease, background 0.3s ease',
+                                  flexShrink: 0,
+                                }}/>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
