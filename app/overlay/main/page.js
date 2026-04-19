@@ -453,7 +453,7 @@ function MainOverlayContent() {
             <div style={{
               display: 'flex', justifyContent: 'center', gap: '6px',
               padding: '8px 20px 10px',
-              background: 'linear-gradient(180deg, rgba(8,5,0,0.97) 0%, rgba(4,3,0,0.95) 100%)',
+              background: 'transparent',
               borderBottom: '1px solid rgba(201,168,76,0.2)',
             }}>
               {aliveTeams.map((team, index) => {
@@ -472,11 +472,11 @@ function MainOverlayContent() {
                     position: 'relative', overflow: 'hidden',
                     background: theme?.card_bg_image
                       ? `linear-gradient(rgba(0,0,0,${1 - (theme?.card_image_opacity || 30) / 100}),rgba(0,0,0,${1 - (theme?.card_image_opacity || 30) / 100})),url(${theme.card_bg_image})`
-                      : index === 0
-                        ? 'linear-gradient(160deg, rgba(40,28,0,0.98) 0%, rgba(20,14,0,0.97) 100%)'
-                        : 'linear-gradient(160deg, rgba(14,11,4,0.98) 0%, rgba(8,6,2,0.97) 100%)',
+                      : 'transparent',
                     backgroundSize: 'cover', backgroundPosition: 'center',
-                    border: `1px solid ${rc}40`, borderTop: `3px solid ${rc}`,
+                    border: '1px solid ${rc}60',
+                    borderTop: '3px solid ${rc}',
+                    backdropFilter: 'blur(4px)',
                     padding: '10px 14px 10px',
                   }}>
                     {index === 0 && (
@@ -497,7 +497,7 @@ function MainOverlayContent() {
                       </span>
                       <div style={{ flex: 1, height: '1px', background: `linear-gradient(90deg, ${rc}50, transparent)` }}/>
                       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: rc, background: `${rc}15`, padding: '1px 6px', border: `1px solid ${rc}30`, clipPath: 'polygon(4px 0%,100% 0%,calc(100% - 4px) 100%,0% 100%)' }}>
-                        {team.total_kills}K
+                        {totalPl > 0 ? Math.round((alivePl / totalPl)*100):0}%
                       </span>
                     </div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: index === 0 ? 22 : 19, fontWeight: 900, letterSpacing: '2px', textTransform: 'uppercase', color: index === 0 ? '#fff8e1' : '#f0ece0', lineHeight: 1, marginBottom: '8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
