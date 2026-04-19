@@ -275,12 +275,12 @@ function MainOverlayContent() {
             position: 'absolute',
             top: 0, left: 200, right: 200,
             zIndex: 100,
-            animation: 'slideDown 0.6s cubic-bezier(0.34,1.2,0.64,1) forwards',
           }}>
             {/* Main bar */}
             <div style={{
               display: 'flex',
               alignItems: 'stretch',
+              gap: 10,
               background: 'rgba(8,4,4,0.88)',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
