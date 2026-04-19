@@ -273,7 +273,7 @@ function MainOverlayContent() {
         {showFinal4 && overlayState === 'final4' && (
           <div style={{
             position: 'absolute',
-            top: 0, left: 66, right: 66,
+            top: 0, left: 200, right: 200,
             zIndex: 100,
             animation: 'slideDown 0.6s cubic-bezier(0.34,1.2,0.64,1) forwards',
           }}>
