@@ -31,12 +31,17 @@ function MainOverlayContent() {
   // keep ref in sync
   useEffect(() => { overlayStateRef.current = overlayState }, [overlayState])
 
+  const fetchAllRef = useRef(null)
+
+  // keep ref in sync so realtime callbacks always call the latest version
+  useEffect(() => { fetchAllRef.current = fetchAll }, )
+
   useEffect(() => {
-    fetchAll()
+    fetchAllRef.current?.()
     const channel = supabase
-      .channel('main-overlay-v5')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => fetchAll())
+      .channel('main-overlay-v6')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchAllRef.current?.())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => fetchAllRef.current?.())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'themes' }, () => { if (matchId) fetchTheme(matchId) })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
         if (payload.new.status === 'finished') checkWinner(payload.new.id)
@@ -44,11 +49,11 @@ function MainOverlayContent() {
           booyahDeclared.current = false
           overlayStateRef.current = 'leaderboard'
           setOverlayState('leaderboard')
-          fetchAll()
+          fetchAllRef.current?.()
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_points' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_points' }, () => fetchAllRef.current?.())
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [])
@@ -151,7 +156,9 @@ function MainOverlayContent() {
       return b.total_kills - a.total_kills
     })
 
-  const totalKillsInMatch = teams.reduce((sum, t) => sum + (t.total_kills || 0), 0)
+  const totalKillsInMatch  = teams.reduce((sum, t) => sum + (t.total_kills || 0), 0)
+  // Win% denominator: total alive players across ALL teams in the whole match
+  const totalAlivePlayers  = teams.reduce((sum, t) => sum + (t.players?.filter(p => p.alive).length ?? 0), 0)
 
   const mode = settings?.leaderboard_mode || 'match'
   const showLeaderboard = settings?.show_leaderboard !== false
@@ -258,169 +265,116 @@ function MainOverlayContent() {
         onMouseLeave={stopDrag}
       >
 
-        {/* ══════════════════ FINAL 4 — floating centered at top ══════════════════ */}
+        {/* ══ FINAL 4 — compact floating, no label ══ */}
         {showFinal4 && overlayState === 'final4' && (
           <div style={{
             position: 'absolute',
-            top: 16,
+            top: 12,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 100,
           }}>
-
-            {/* Floating glass container */}
             <div style={{
-              background: 'rgba(8,4,4,0.72)',
-              backdropFilter: 'blur(18px)',
-              WebkitBackdropFilter: 'blur(18px)',
-              border: '1px solid rgba(192,57,43,0.35)',
-              borderRadius: 14,
-              boxShadow: '0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 1px 0 rgba(255,255,255,0.08) inset',
-              overflow: 'hidden',
-              minWidth: 560,
+              display: 'flex',
+              gap: 4,
+              background: 'rgba(6,2,2,0.45)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(192,57,43,0.2)',
+              borderRadius: 10,
+              padding: '7px 8px',
+              boxShadow: '0 6px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05)',
             }}>
+              {aliveTeams.map((team, index) => {
+                const alivePl  = team.players?.filter(p => p.alive).length ?? 0
+                const totalPl  = team.players?.length ?? 4
+                const kills    = team.total_kills
+                // Win% = team kills / total alive players across whole match
+                const winPct   = totalAlivePlayers > 0 ? Math.round((kills / totalAlivePlayers) * 100) : 0
+                const rankColor = index === 0 ? '#FFD700' : index === 1 ? '#C8C8C8' : index === 2 ? '#cd7f32' : '#c0392b'
 
-              {/* Top label bar */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                padding: '5px 20px',
-                borderBottom: '1px solid rgba(192,57,43,0.25)',
-                background: 'rgba(192,57,43,0.08)',
-              }}>
-                <div style={{ width:5, height:5, borderRadius:'50%', background:'#c0392b', boxShadow:'0 0 6px #c0392b', animation:'liveBlink 1s infinite' }}/>
-                <span style={{
-                  fontFamily: "'Barlow Condensed',sans-serif",
-                  fontSize: 9, fontWeight: 800, letterSpacing: '5px',
-                  textTransform: 'uppercase', color: 'rgba(220,80,60,0.85)',
-                }}>
-                  Final {aliveTeams.length} Teams Alive
-                </span>
-                <div style={{ width:5, height:5, borderRadius:'50%', background:'#c0392b', boxShadow:'0 0 6px #c0392b', animation:'liveBlink 1s infinite' }}/>
-              </div>
+                return (
+                  <div key={team.id} style={{
+                    position: 'relative',
+                    width: 112,
+                    background: `linear-gradient(160deg,${rankColor}0a 0%,rgba(10,4,4,0.3) 100%)`,
+                    border: `1px solid ${rankColor}18`,
+                    borderTop: `2px solid ${rankColor}`,
+                    borderRadius: 7,
+                    overflow: 'hidden',
+                    padding: '6px 8px 7px',
+                  }}>
 
-              {/* Cards row */}
-              <div style={{ display:'flex', gap:1, padding:'10px 10px 12px' }}>
-                {aliveTeams.map((team, index) => {
-                  const alivePl  = team.players?.filter(p => p.alive).length ?? 0
-                  const totalPl  = team.players?.length ?? 4
-                  const kills    = team.total_kills
-                  const killPct  = totalKillsInMatch > 0 ? Math.round((kills / totalKillsInMatch) * 100) : 0
-                  const rankColor = index === 0 ? '#FFD700' : index === 1 ? '#C8C8C8' : index === 2 ? '#cd7f32' : '#c0392b'
-
-                  return (
-                    <div
-                      key={team.id}
-                      style={{
-                        position: 'relative',
-                        width: 148,
-                        background: index === 0
-                          ? 'linear-gradient(160deg,rgba(40,28,0,0.6) 0%,rgba(20,14,0,0.4) 100%)'
-                          : 'linear-gradient(160deg,rgba(30,8,8,0.5) 0%,rgba(14,4,4,0.35) 100%)',
-                        border: `1px solid ${rankColor}22`,
-                        borderTop: `2px solid ${rankColor}`,
-                        borderRadius: 8,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {/* Top glow sweep */}
+                    {/* Rank + kills */}
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:3 }}>
+                      <span style={{
+                        fontFamily:"'Barlow Condensed',sans-serif",
+                        fontSize:8, fontWeight:900, letterSpacing:'2px',
+                        color:rankColor, textTransform:'uppercase',
+                      }}>{RANK_LABELS[index]}</span>
                       <div style={{
-                        position:'absolute', top:0, left:0, right:0, height:'50%',
-                        background:`linear-gradient(180deg,${rankColor}12 0%,transparent 100%)`,
-                        pointerEvents:'none',
-                      }}/>
-
-                      <div style={{ padding:'9px 10px 10px', position:'relative', zIndex:1 }}>
-
-                        {/* Rank label + kills pill */}
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:5 }}>
-                          <span style={{
-                            fontFamily:"'Barlow Condensed',sans-serif",
-                            fontSize:10, fontWeight:900, letterSpacing:'2.5px',
-                            color:rankColor, textTransform:'uppercase',
-                          }}>
-                            {RANK_LABELS[index]}
-                          </span>
-                          <div style={{
-                            display:'flex', alignItems:'center', gap:3,
-                            background:'rgba(192,57,43,0.22)',
-                            border:'1px solid rgba(192,57,43,0.35)',
-                            borderRadius:3, padding:'2px 6px 2px 4px',
-                          }}>
-                            <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
-                              <path d="M1 1L9 9M9 1L1 9" stroke="#c0392b" strokeWidth="2.2" strokeLinecap="round"/>
-                            </svg>
-                            <span style={{
-                              fontFamily:"'Barlow Condensed',sans-serif",
-                              fontSize:12, fontWeight:900, color:'#fff', letterSpacing:'0.5px',
-                            }}>{kills}</span>
-                          </div>
-                        </div>
-
-                        {/* Team name */}
-                        <div style={{
+                        display:'flex', alignItems:'center', gap:2,
+                        background:'rgba(192,57,43,0.18)',
+                        border:'1px solid rgba(192,57,43,0.28)',
+                        borderRadius:2, padding:'1px 5px 1px 3px',
+                      }}>
+                        <svg width="6" height="6" viewBox="0 0 10 10" fill="none">
+                          <path d="M1 1L9 9M9 1L1 9" stroke="#c0392b" strokeWidth="2.2" strokeLinecap="round"/>
+                        </svg>
+                        <span style={{
                           fontFamily:"'Barlow Condensed',sans-serif",
-                          fontSize:21, fontWeight:900, letterSpacing:'2px',
-                          textTransform:'uppercase', color:'#fff', lineHeight:1,
-                          marginBottom:10,
-                          whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
-                          textShadow: index === 0 ? `0 0 18px ${rankColor}60` : 'none',
-                        }}>
-                          {team.name}
-                        </div>
-
-                        {/* ── VERTICAL BARS ── */}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'flex-end',
-                          justifyContent: 'center',
-                          gap: 5,
-                          height: 32,
-                          marginBottom: 8,
-                        }}>
-                          {Array.from({ length: totalPl }, (_, i) => {
-                            const isAlive = i < alivePl
-                            // bars get taller left to right: 16, 22, 26, 32
-                            const heights = [16, 22, 26, 32]
-                            const h = heights[i] || 20
-                            return (
-                              <div key={i} style={{
-                                width: 10,
-                                height: h,
-                                borderRadius: '2px 2px 1px 1px',
-                                background: isAlive
-                                  ? `linear-gradient(180deg, ${rankColor} 0%, ${rankColor}88 100%)`
-                                  : 'rgba(255,255,255,0.08)',
-                                boxShadow: isAlive ? `0 0 8px ${rankColor}70, 0 2px 4px rgba(0,0,0,0.4)` : 'none',
-                                transition: 'background 0.35s ease, box-shadow 0.35s ease',
-                                flexShrink: 0,
-                              }}/>
-                            )
-                          })}
-                        </div>
-
-                        {/* Win % only */}
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:4 }}>
-                          <span style={{
-                            fontFamily:"'Barlow Condensed',sans-serif",
-                            fontSize:8, fontWeight:700, letterSpacing:'2px',
-                            textTransform:'uppercase', color:'rgba(255,255,255,0.28)',
-                          }}>WIN%</span>
-                          <span style={{
-                            fontFamily:"'Barlow Condensed',sans-serif",
-                            fontSize:14, fontWeight:900,
-                            color: rankColor,
-                            textShadow: `0 0 10px ${rankColor}70`,
-                          }}>{killPct}%</span>
-                        </div>
-
+                          fontSize:10, fontWeight:900, color:'#fff',
+                        }}>{kills}</span>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
+
+                    {/* Team name */}
+                    <div style={{
+                      fontFamily:"'Barlow Condensed',sans-serif",
+                      fontSize:16, fontWeight:900, letterSpacing:'1.5px',
+                      textTransform:'uppercase', color:'#fff', lineHeight:1,
+                      marginBottom:7,
+                      whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+                      textShadow: index === 0 ? `0 0 14px ${rankColor}55` : 'none',
+                    }}>{team.name}</div>
+
+                    {/* Vertical bars — all same height, filled = alive */}
+                    <div style={{
+                      display:'flex', alignItems:'flex-end',
+                      justifyContent:'center', gap:4,
+                      height:20, marginBottom:5,
+                    }}>
+                      {Array.from({ length: totalPl }, (_, i) => (
+                        <div key={i} style={{
+                          width: 9, height: 20,
+                          borderRadius: '2px 2px 1px 1px',
+                          background: i < alivePl
+                            ? `linear-gradient(180deg,${rankColor} 0%,${rankColor}88 100%)`
+                            : 'rgba(255,255,255,0.07)',
+                          boxShadow: i < alivePl ? `0 0 6px ${rankColor}60` : 'none',
+                          transition: 'background 0.3s ease, box-shadow 0.3s ease',
+                          flexShrink: 0,
+                        }}/>
+                      ))}
+                    </div>
+
+                    {/* Win% */}
+                    <div style={{ display:'flex', alignItems:'baseline', justifyContent:'flex-end', gap:3 }}>
+                      <span style={{
+                        fontFamily:"'Barlow Condensed',sans-serif",
+                        fontSize:7, fontWeight:700, letterSpacing:'1.5px',
+                        textTransform:'uppercase', color:'rgba(255,255,255,0.25)',
+                      }}>WIN%</span>
+                      <span style={{
+                        fontFamily:"'Barlow Condensed',sans-serif",
+                        fontSize:12, fontWeight:900,
+                        color:rankColor, textShadow:`0 0 8px ${rankColor}60`,
+                      }}>{winPct}%</span>
+                    </div>
+
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
