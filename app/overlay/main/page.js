@@ -358,7 +358,7 @@ function MainOverlayContent() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {/* Kills dakhabe final 4 ui */}
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                          <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.4)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS</span>
+                          <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.4)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS: </span>
                           <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', fontFamily: "'Barlow Condensed',sans-serif" }}>{kills}</span>
                         </div>
                         {/* win and kills ka seperate korar dag */}
