@@ -289,7 +289,7 @@ function MainOverlayContent() {
               const totalPl = team.players?.length ?? 4
               const kills = team.total_kills || 0
               const winPct = totalKillsAlive > 0
-                ? Math.round((kills / totalKillsAlive) * 100)
+                ? Math.round(((kills + alivePl) / totalKillsAlive) * 100)
                 : Math.round(100 / aliveTeams.length)
 
               const rankColors = ['#FFD700', '#C8C8C8', '#cd7f32', '#e05252']
@@ -355,21 +355,30 @@ function MainOverlayContent() {
                       }}>
                         {team.name}
                       </div>
-                      {/* Win% label */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{
-                          fontFamily: "'Barlow Condensed',sans-serif",
-                          fontSize: 9, fontWeight: 700,
-                          color: 'rgba(255,255,255,0.35)',
-                          letterSpacing: '1.5px',
-                          textTransform: 'uppercase',
-                        }}>WIN</span>
-                        <span style={{
-                          fontFamily: "'Barlow Condensed',sans-serif",
-                          fontSize: 13, fontWeight: 900,
-                          color: rc,
-                          letterSpacing: '0.5px',
-                        }}>{winPct}%</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {/* Kills dakhabe final 4 ui */}
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                          <span style={{ fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.4)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS</span>
+                          <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', fontFamily: "'Barlow Condensed',sans-serif" }}>{kills}</span>
+                        </div>
+                        {/* win and kills ka seperate korar dag */}
+                        <div style={{ width: 1, height: 8, background: 'rgba(255,255,255,0.1)' }} />
+                        {/* Win% label */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{
+                            fontFamily: "'Barlow Condensed',sans-serif",
+                            fontSize: 9, fontWeight: 700,
+                            color: 'rgba(255,255,255,0.35)',
+                            letterSpacing: '1.5px',
+                            textTransform: 'uppercase',
+                          }}>WIN</span>
+                          <span style={{
+                            fontFamily: "'Barlow Condensed',sans-serif",
+                            fontSize: 13, fontWeight: 900,
+                            color: rc,
+                            letterSpacing: '0.5px',
+                          }}>{winPct}%</span>
+                        </div>
                       </div>
                     </div>
 
