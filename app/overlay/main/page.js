@@ -147,7 +147,14 @@ function MainOverlayContent() {
               {aliveTeams.map((team) => {
                 const alivePl = team.players?.filter(p => p.alive).length ?? 0
                 const totalPl = team.players?.length ?? 4
-                const winPct = totalKillsAlive > 0 ? ((team.total_kills + alivePl) / totalKillsAlive * 100).toFixed(1) : "0.0"
+                const playerWeight = Math.pow(alivePl, 2.5);
+                const killWeight = team.total_kills * 0.1;
+                const teamStrength = playerWeight + killWeight;
+                const totalStrength = aliveTeams.reduce((acc, t) => {
+                  const tAlive = t.players?.filter(p => p.alive).length ?? 0;
+                  return acc + (Math.pow(tAlive, 2.5) + (t.total_kills * 0.1));
+                }, 0);
+                const winPct = totalStrength > 0 ? ((teamStrength / totalStrength) * 100).toFixed(2) : "0.00";
                 const themeColor = '#FFD700'
 
                 return (
@@ -159,7 +166,7 @@ function MainOverlayContent() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 900, color: 'rgb(255, 255, 255)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS: {team.total_kills}</span>
+                        <span style={{ fontSize: 12, fontWeight: 900, color: 'rgb(255, 255, 255)', fontFamily: "'Barlow Condensed',sans-serif" }}>Kill(s): {team.total_kills}</span>
                         <div style={{ width: 1, height: 8, background: 'rgba(255,255,255,0.1)' }} />
                         <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: themeColor }}>Win : {winPct}%</span>
                       </div>
