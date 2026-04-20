@@ -16,119 +16,54 @@ function MainOverlayContent() {
   const booyahDeclared = useRef(false)
   const channelRef = useRef(null)
   const matchIdRef = useRef(matchId)
+  const isFetchingRef = useRef(false)
 
   const [leaderboardPos, setLeaderboardPos] = useState({ x: 20, y: 20 })
   const [leaderboardSize, setLeaderboardSize] = useState({ width: 320, height: 600 })
   const dragging = useRef(null)
   const dragOffset = useRef({ x: 0, y: 0 })
 
-  // Keep matchIdRef always in sync so closures can read latest value
   useEffect(() => {
     matchIdRef.current = matchId
   }, [matchId])
 
-  useEffect(() => {
-      fetchAll()
-      setupRealtime()
-
-      const reconnect = setInterval(() => setupRealtime(), 25000)
-    
-      const poll = setInterval(async () => {
-        let liveMatchId = matchIdRef.current
-        if (!liveMatchId) {
-          const { data: liveMatch } = await supabase.from('matches').select('*').eq('status', 'live').limit(1).single()
-          if (!liveMatch) return
-          liveMatchId = liveMatch.id
-        }
-        const { data } = await supabase
-          .from('teams')
-          .select('*, players(*)')
-          .eq('match_id', liveMatchId)
-          .order('id', { ascending: true })
-        if (data) {
-          setTeams(data)
-          const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
-          if (aliveCount <= 4 && aliveCount > 0) setOverlayState('final4')
-          else setOverlayState('leaderboard')
-        }
-      }, 5000)
-
-      return () => {
-        if (channelRef.current) supabase.removeChannel(channelRef.current)
-        clearInterval(reconnect)
-        clearInterval(poll)
-      }
-    }, [matchId])
-
-  // Extracted so both realtime handlers and fetchTeams can call it
+  // Core fetch — always reads fresh from Supabase, no stale state
   async function loadTeams() {
-    let liveMatchId = matchIdRef.current
-    if (!liveMatchId) {
-      const { data: liveMatch } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('status', 'live')
-        .limit(1)
-        .single()
-      if (!liveMatch) return
-      liveMatchId = liveMatch.id
-    }
-    const { data } = await supabase
-      .from('teams')
-      .select('*, players(*)')
-      .eq('match_id', liveMatchId)
-      .order('id', { ascending: true })
-    if (data) {
-      setTeams(data)
+    // Prevent overlapping fetches
+    if (isFetchingRef.current) return
+    isFetchingRef.current = true
+
+    try {
+      let liveMatchId = matchIdRef.current
+      if (!liveMatchId) {
+        const { data: liveMatch } = await supabase
+          .from('matches')
+          .select('id')
+          .eq('status', 'live')
+          .limit(1)
+          .single()
+        if (!liveMatch) return
+        liveMatchId = liveMatch.id
+      }
+
+      const { data, error } = await supabase
+        .from('teams')
+        .select('*, players(*)')
+        .eq('match_id', liveMatchId)
+        .order('id', { ascending: true })
+
+      if (error) { console.error('loadTeams error:', error); return }
+      if (!data) return
+
+      // Always set fresh data — no merging, no stale state
+      setTeams([...data])
+
       const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
       if (aliveCount <= 4 && aliveCount > 0) setOverlayState('final4')
       else setOverlayState('leaderboard')
+    } finally {
+      isFetchingRef.current = false
     }
-  }
-
-  function setupRealtime() {
-    if (channelRef.current) supabase.removeChannel(channelRef.current)
-
-    let debounceTimer = null
-
-    function debouncedLoad() {
-      if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => {
-        loadTeams()
-      }, 300)
-    }
-
-    channelRef.current = supabase
-      .channel(`overlay-live-${Date.now()}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'teams'
-      }, () => {
-        debouncedLoad()
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'players'
-      }, () => {
-        debouncedLoad()
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'overlay_settings'
-      }, () => fetchSettings())
-      .subscribe((status) => {
-        console.log('Realtime status:', status)
-      })
-  }
-
-  async function fetchAll() {
-    if (booyahDeclared.current) return
-    await fetchSettings()
-    await loadTeams()
-    await fetchPoints()
   }
 
   async function fetchSettings() {
@@ -143,11 +78,6 @@ function MainOverlayContent() {
       setLeaderboardPos({ x: data.leaderboard_x || 20, y: data.leaderboard_y || 20 })
       setLeaderboardSize({ width: 320, height: data.leaderboard_height || 600 })
     }
-  }
-
-  // kept for compatibility — now just calls loadTeams
-  async function fetchTeams() {
-    await loadTeams()
   }
 
   async function fetchPoints() {
@@ -172,6 +102,61 @@ function MainOverlayContent() {
       setOverlayState('booyah')
     }
   }
+
+  function setupRealtime() {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
+    channelRef.current = supabase
+      .channel(`overlay-${Date.now()}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'teams'
+      }, () => {
+        // Small delay so DB write is fully committed before we fetch
+        setTimeout(() => loadTeams(), 100)
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'players'
+      }, () => {
+        setTimeout(() => loadTeams(), 100)
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'overlay_settings'
+      }, () => fetchSettings())
+      .subscribe((status) => {
+        console.log('Realtime:', status)
+      })
+  }
+
+  useEffect(() => {
+    // Initial load
+    fetchSettings()
+    loadTeams()
+    fetchPoints()
+
+    // Realtime
+    setupRealtime()
+
+    // Reconnect realtime every 25s to prevent silent disconnects
+    const reconnect = setInterval(() => setupRealtime(), 25000)
+
+    // 5s poll — always fetches fresh, no closure issues
+    const poll = setInterval(() => loadTeams(), 5000)
+
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current)
+      clearInterval(reconnect)
+      clearInterval(poll)
+    }
+  }, [matchId])
 
   // Derived state for UI
   const teamsWithPoints = teams.map(team => {
@@ -207,7 +192,7 @@ function MainOverlayContent() {
 
       <main className="min-h-screen bg-transparent relative" onMouseMove={onMouseMove} onMouseUp={stopDrag}>
 
-        {/* ══ FINAL 4 — PRESERVED UI + WEIGHTED LOGIC ══ */}
+        {/* ══ FINAL 4 ══ */}
         {overlayState === 'final4' && (
           <div style={{ position: 'absolute', top: 10, left: 200, right: 200, zIndex: 100 }}>
             <div style={{ display: 'flex', height: 56, gap: 12, background: 'transparent' }}>
@@ -250,15 +235,15 @@ function MainOverlayContent() {
           </div>
         )}
 
-        {/* ══ LEADERBOARD — PRESERVED UI ══ */}
+        {/* ══ LEADERBOARD ══ */}
         {overlayState === 'leaderboard' && (
           <div className="absolute" style={{ left: leaderboardPos.x, top: leaderboardPos.y, width: leaderboardSize.width, zIndex: 50 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 12px', background:'linear-gradient(90deg,rgba(10,8,4,0.98),rgba(20,15,5,0.95))', borderLeft:'3px solid #c9a84c' }}>
               <span style={{ fontSize:9, letterSpacing:'3px', textTransform:'uppercase', color:'#c9a84c', fontWeight:700, fontFamily:"'Barlow Condensed',sans-serif" }}>Match Points</span>
             </div>
             <div className="grid items-center px-2 py-[7px]" style={{ gridTemplateColumns:'42px 1fr 44px 54px', background:'linear-gradient(90deg,#b8974a 0%,#e8c96a 40%,#c9a84c 100%)', cursor:'grab' }} onMouseDown={startDrag}>
-              {['RANK','TEAM','KILLS','ALIVE'].map((h) => (
-                <span key={h} style={{ fontSize:15, fontWeight:800, gap:21, color:'rgba(20,10,0,0.75)', fontFamily:"'Barlow Condensed',sans-serif" }}>{h}</span>
+              {['RANK','TEAM','ELIMS','ALIVE'].map((h) => (
+                <span key={h} style={{ fontSize:9, fontWeight:800, color:'rgba(20,10,0,0.75)', fontFamily:"'Barlow Condensed',sans-serif" }}>{h}</span>
               ))}
             </div>
             <div className="flex flex-col gap-[1px] mt-[1px]">
@@ -273,7 +258,7 @@ function MainOverlayContent() {
                     <div className="text-center"><span style={{ color:'#fff', fontWeight:800 }}>{team.total_kills}</span></div>
                     <div className="flex gap-1 justify-center">
                       {isElim ? (
-                        <span style={{ color:'#ff4444', fontSize:12 }}>ELIM</span>
+                        <span style={{ color:'#ff4444', fontSize:8 }}>ELIM</span>
                       ) : (
                         Array.from({ length: 4 }).map((_, i) => (
                           <div key={i} style={{ width:4, height:14, background: i < alivePlayers ? '#e8c96a' : 'rgba(255,255,255,0.1)' }}/>
