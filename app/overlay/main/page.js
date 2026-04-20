@@ -273,7 +273,7 @@ function MainOverlayContent() {
                     <div className="text-center"><span style={{ color:'#fff', fontWeight:800 }}>{team.total_kills}</span></div>
                     <div className="flex gap-1 justify-center">
                       {isElim ? (
-                        <span style={{ color:'#ff4444', fontSize:8 }}>ELIM</span>
+                        <span style={{ color:'#ff4444', fontSize:12 }}>ELIM</span>
                       ) : (
                         Array.from({ length: 4 }).map((_, i) => (
                           <div key={i} style={{ width:4, height:14, background: i < alivePlayers ? '#e8c96a' : 'rgba(255,255,255,0.1)' }}/>
