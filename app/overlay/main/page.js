@@ -96,7 +96,7 @@ function MainOverlayContent() {
       }
     })
   }
-    
+
   async function fetchAll() {
     if (booyahDeclared.current) return
     await fetchSettings()
@@ -192,7 +192,7 @@ function MainOverlayContent() {
                   return acc + (Math.pow(tAlive, 2.5) + (t.total_kills * 0.1));
                 }, 0);
                 
-                const winPct = totalStrength > 0 ? ((teamStrength / totalStrength) * 100).toFixed(0) : "0";
+                const winPct = totalStrength > 0 ? ((teamStrength / totalStrength) * 100).toFixed(2) : "0.00";
                 const themeColor = '#FFD700'
 
                 return (
