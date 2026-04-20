@@ -374,7 +374,7 @@ function MainOverlayContent() {
                           <span style={{
                             fontFamily: "'Barlow Condensed',sans-serif",
                             fontSize: 13, fontWeight: 900,
-                            color: rc,
+                            color: themeColor,
                             fontVariantNumeric: 'tabular-nums',
                             letterSpacing: '0.5px',
                           }}>{winPct}%</span>
