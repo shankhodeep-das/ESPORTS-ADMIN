@@ -96,7 +96,7 @@ function MainOverlayContent() {
       }
     })
   }
-}
+    
   async function fetchAll() {
     if (booyahDeclared.current) return
     await fetchSettings()
