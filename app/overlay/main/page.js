@@ -36,38 +36,43 @@ function MainOverlayContent() {
   }, [matchId])
 
   function setupRealtime() {
-    if (channelRef.current) supabase.removeChannel(channelRef.current)
-    
-    channelRef.current = supabase
-      .channel(`overlay-instant-${Date.now()}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, (payload) => {
-        // ══ INSTANT UPDATE ══
-        // This takes the data directly from the change, no lag.
-        setTeams(prevTeams =>
-          prevTeams.map(team =>
-            team.id === payload.new.id ? { ...team, ...payload.new } : team
-          )
-        )
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' }, (payload) => {
-        // Update specific player status inside the team instantly
-        setTeams(prevTeams => prevTeams.map(t => ({
-          ...t,
-          players: t.players?.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p)
-        })))
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
-        if (payload.new.status === 'finished') checkWinner(payload.new.id)
-        else if (payload.new.status === 'live') {
-          booyahDeclared.current = false
-          setOverlayState('leaderboard')
-          fetchAll()
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
-      .subscribe()
-  }
-
+  if (channelRef.current) supabase.removeChannel(channelRef.current)
+  
+  // Use a unique channel name every time to force a fresh connection
+  channelRef.current = supabase
+    .channel(`overlay-live-${Date.now()}`)
+    .on('postgres_changes', { 
+      event: 'UPDATE', 
+      schema: 'public', 
+      table: 'teams' 
+    }, (payload) => {
+      // Logic: If the new kill count is different from what we have, force update.
+      setTeams(currentTeams => {
+        return currentTeams.map(team => {
+          if (team.id === payload.new.id) {
+            // Keep existing nested players, but take everything else from the fresh payload
+            return { ...team, ...payload.new, players: team.players };
+          }
+          return team;
+        });
+      });
+    })
+    .on('postgres_changes', { 
+      event: 'UPDATE', 
+      schema: 'public', 
+      table: 'players' 
+    }, (payload) => {
+      // Sync player alive status instantly
+      setTeams(prev => prev.map(t => ({
+        ...t,
+        players: t.players?.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p)
+      })));
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
+    .subscribe((status) => {
+      console.log("Realtime status:", status); // Check your console to ensure it says 'SUBSCRIBED'
+    });
+}
   async function fetchAll() {
     if (booyahDeclared.current) return
     await fetchSettings()
@@ -92,7 +97,7 @@ function MainOverlayContent() {
       if (!liveMatch) return
       liveMatchId = liveMatch.id
     }
-    const { data } = await supabase.from('teams').select('*, players(*)').eq('match_id', liveMatchId)
+    const { data, error } = await supabase.from('teams').select('*, players(*)').eq('match_id', liveMatchId).order('id', { ascending: true });
     if (data) {
       setTeams(data)
       const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
