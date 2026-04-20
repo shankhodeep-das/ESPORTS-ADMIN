@@ -13,45 +13,49 @@ function MainOverlayContent() {
   const [winner, setWinner] = useState(null)
   const [settings, setSettings] = useState(null)
   const [matchPoints, setMatchPoints] = useState([])
-  const [overallPoints, setOverallPoints] = useState([])
-  const [theme, setTheme] = useState(null)
   const booyahDeclared = useRef(false)
   const channelRef = useRef(null)
 
   const [leaderboardPos, setLeaderboardPos] = useState({ x: 20, y: 20 })
   const [leaderboardSize, setLeaderboardSize] = useState({ width: 420, height: 600 })
   const dragging = useRef(null)
-  const resizing = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
     fetchAll()
     setupRealtime()
 
+    // ══ RECONNECT ONLY ══
+    // We removed the 4-second 'poll' because it causes the lagging data issue.
     const reconnect = setInterval(() => setupRealtime(), 25000)
-    const poll = setInterval(() => {
-      if (!booyahDeclared.current) fetchAll()
-    }, 4000)
 
     return () => {
       if (channelRef.current) supabase.removeChannel(channelRef.current)
       clearInterval(reconnect)
-      clearInterval(poll)
     }
   }, [matchId])
 
   function setupRealtime() {
     if (channelRef.current) supabase.removeChannel(channelRef.current)
+    
     channelRef.current = supabase
-      .channel(`overlay-${Date.now()}`)
+      .channel(`overlay-instant-${Date.now()}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, (payload) => {
+        // ══ INSTANT UPDATE ══
+        // This takes the data directly from the change, no lag.
         setTeams(prevTeams =>
           prevTeams.map(team =>
             team.id === payload.new.id ? { ...team, ...payload.new } : team
           )
         )
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => fetchAll())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' }, (payload) => {
+        // Update specific player status inside the team instantly
+        setTeams(prevTeams => prevTeams.map(t => ({
+          ...t,
+          players: t.players?.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p)
+        })))
+      })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
         if (payload.new.status === 'finished') checkWinner(payload.new.id)
         else if (payload.new.status === 'live') {
@@ -91,8 +95,8 @@ function MainOverlayContent() {
     const { data } = await supabase.from('teams').select('*, players(*)').eq('match_id', liveMatchId)
     if (data) {
       setTeams(data)
-      const alive = data.filter(t => t.players?.some(p => p.alive))
-      if (alive.length <= 4 && alive.length > 0) setOverlayState('final4')
+      const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
+      if (aliveCount <= 4 && aliveCount > 0) setOverlayState('final4')
       else setOverlayState('leaderboard')
     }
   }
@@ -112,13 +116,13 @@ function MainOverlayContent() {
     }
   }
 
+  // Derived state for UI
   const teamsWithPoints = teams.map(team => {
     const mp = matchPoints.find(p => p.team_id === team.id)
     return { ...team, matchTotal: mp?.total_points ?? 0 }
   }).sort((a, b) => b.matchTotal - a.matchTotal || b.total_kills - a.total_kills)
 
   const aliveTeams = teams.filter(t => t.players?.some(p => p.alive)).sort((a, b) => b.total_kills - a.total_kills)
-  const totalKillsAlive = aliveTeams.reduce((sum, t) => sum + (t.total_kills || 0), 0)
 
   function startDrag(e) {
     dragging.current = 'leaderboard'
@@ -126,11 +130,9 @@ function MainOverlayContent() {
   }
   function onMouseMove(e) {
     if (dragging.current === 'leaderboard') setLeaderboardPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
-    else if (resizing.current) setLeaderboardSize({ width: Math.max(300, e.clientX - leaderboardPos.x), height: Math.max(200, e.clientY - leaderboardPos.y) })
   }
-  function stopDrag() { dragging.current = null; resizing.current = false }
+  function stopDrag() { dragging.current = null }
 
-  const SUPS = ['', 'ST', 'ND', 'RD', 'TH', 'TH', 'TH', 'TH', 'TH', 'TH']
   const getRankColor = (rank) => rank === 1 ? '#FFD700' : rank === 2 ? '#D4D4D4' : rank === 3 ? '#cd7f32' : 'rgba(180,190,210,0.5)'
 
   if (overlayState === 'booyah') {
@@ -146,21 +148,22 @@ function MainOverlayContent() {
 
       <main className="min-h-screen bg-transparent relative" onMouseMove={onMouseMove} onMouseUp={stopDrag}>
 
-        {/* ══ FINAL 4 — KEEPING YOUR EXACT UI ══ */}
+        {/* ══ FINAL 4 — PRESERVED UI + WEIGHTED LOGIC ══ */}
         {overlayState === 'final4' && (
           <div style={{ position: 'absolute', top: 10, left: 200, right: 200, zIndex: 100 }}>
             <div style={{ display: 'flex', height: 56, gap: 12, background: 'transparent' }}>
               {aliveTeams.map((team) => {
                 const alivePl = team.players?.filter(p => p.alive).length ?? 0
                 const totalPl = team.players?.length ?? 4
-                const playerWeight = Math.pow(alivePl, 2.5);
-                const killWeight = team.total_kills * 0.1;
-                const teamStrength = playerWeight + killWeight;
+                
+                // Weighted logic: Alive players power vs Kills
+                const teamStrength = Math.pow(alivePl, 2.5) + (team.total_kills * 0.1);
                 const totalStrength = aliveTeams.reduce((acc, t) => {
                   const tAlive = t.players?.filter(p => p.alive).length ?? 0;
                   return acc + (Math.pow(tAlive, 2.5) + (t.total_kills * 0.1));
                 }, 0);
-                const winPct = totalStrength > 0 ? ((teamStrength / totalStrength) * 100).toFixed(2) : "0.00";
+                
+                const winPct = totalStrength > 0 ? ((teamStrength / totalStrength) * 100).toFixed(0) : "0";
                 const themeColor = '#FFD700'
 
                 return (
@@ -174,7 +177,7 @@ function MainOverlayContent() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontSize: 12, fontWeight: 900, color: 'rgb(255, 255, 255)', fontFamily: "'Barlow Condensed',sans-serif" }}>Kill(s): {team.total_kills}</span>
                         <div style={{ width: 1, height: 8, background: 'rgba(255,255,255,0.1)' }} />
-                        <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: themeColor }}>Win : {winPct}%</span>
+                        <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: themeColor }}>Win: {winPct}%</span>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28 }}>
@@ -189,7 +192,7 @@ function MainOverlayContent() {
           </div>
         )}
 
-        {/* ══ LEADERBOARD — KEEPING YOUR EXACT UI ══ */}
+        {/* ══ LEADERBOARD — PRESERVED UI ══ */}
         {overlayState === 'leaderboard' && (
           <div className="absolute" style={{ left: leaderboardPos.x, top: leaderboardPos.y, width: leaderboardSize.width, zIndex: 50 }}>
              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 12px', background:'linear-gradient(90deg,rgba(10,8,4,0.98),rgba(20,15,5,0.95))', borderLeft:'3px solid #c9a84c' }}>
