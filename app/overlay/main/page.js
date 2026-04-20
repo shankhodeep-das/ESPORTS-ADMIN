@@ -61,16 +61,41 @@ function MainOverlayContent() {
       event: 'UPDATE',
       schema: 'public',
       table: 'teams'
-    }, () => {
-      fetchTeams()
+    }, async () => {
+      let liveMatchId = matchId
+      if (!liveMatchId) {
+        const { data: liveMatch } = await supabase.from('matches').select('*').eq('status', 'live').limit(1).single()
+        if (!liveMatch) return
+        liveMatchId = liveMatch.id
+      }
+      const { data } = await supabase.from('teams').select('*, players(*)').eq('match_id', liveMatchId).order('id', { ascending: true })
+      if (data) {
+        setTeams(data)
+        const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
+        if (aliveCount <= 4 && aliveCount > 0) setOverlayState('final4')
+        else setOverlayState('leaderboard')
+      }
     })
     .on('postgres_changes', {
       event: 'UPDATE',
       schema: 'public',
       table: 'players'
-    }, () => {
-      fetchTeams()
+    }, async () => {
+      let liveMatchId = matchId
+      if (!liveMatchId) {
+        const { data: liveMatch } = await supabase.from('matches').select('*').eq('status', 'live').limit(1).single()
+        if (!liveMatch) return
+        liveMatchId = liveMatch.id
+      }
+      const { data } = await supabase.from('teams').select('*, players(*)').eq('match_id', liveMatchId).order('id', { ascending: true })
+      if (data) {
+        setTeams(data)
+        const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
+        if (aliveCount <= 4 && aliveCount > 0) setOverlayState('final4')
+        else setOverlayState('leaderboard')
+      }
     })
+  }
 }
   async function fetchAll() {
     if (booyahDeclared.current) return
