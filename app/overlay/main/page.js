@@ -141,7 +141,7 @@ function MainOverlayContent() {
     if (data) {
       setSettings(data)
       setLeaderboardPos({ x: data.leaderboard_x || 20, y: data.leaderboard_y || 20 })
-      setLeaderboardSize({ width: data.leaderboard_width || 320, height: data.leaderboard_height || 600 })
+      setLeaderboardSize({ width: 320, height: data.leaderboard_height || 600 })
     }
   }
 
