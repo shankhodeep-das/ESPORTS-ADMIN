@@ -159,9 +159,9 @@ function MainOverlayContent() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.4)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS: {team.total_kills}</span>
+                        <span style={{ fontSize: 12, fontWeight: 900, color: 'rgb(255, 255, 255)', fontFamily: "'Barlow Condensed',sans-serif" }}>KILLS: {team.total_kills}</span>
                         <div style={{ width: 1, height: 8, background: 'rgba(255,255,255,0.1)' }} />
-                        <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: themeColor }}>{winPct}%</span>
+                        <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: themeColor }}>Win : {winPct}%</span>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28 }}>
