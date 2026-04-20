@@ -335,7 +335,7 @@ function MainOverlayContent() {
                       <span style={{
                         fontFamily: "'Barlow Condensed',sans-serif",
                         fontSize: 10, fontWeight: 900,
-                        color: rc, letterSpacing: 0,
+                        color: themeColor, letterSpacing: 0,
                       }}>
                         {team.name?.slice(0, 2).toUpperCase()}
                       </span>
