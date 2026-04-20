@@ -258,7 +258,7 @@ function MainOverlayContent() {
             </div>
             <div className="grid items-center px-2 py-[7px]" style={{ gridTemplateColumns:'42px 1fr 44px 54px', background:'linear-gradient(90deg,#b8974a 0%,#e8c96a 40%,#c9a84c 100%)', cursor:'grab' }} onMouseDown={startDrag}>
               {['RANK','TEAM','ELIMS','ALIVE'].map((h) => (
-                <span key={h} style={{ fontSize:9, fontWeight:800, gap:4, color:'rgba(20,10,0,0.75)', fontFamily:"'Barlow Condensed',sans-serif" }}>{h}</span>
+                <span key={h} style={{ fontSize:15, fontWeight:800, gap:21, color:'rgba(20,10,0,0.75)', fontFamily:"'Barlow Condensed',sans-serif" }}>{h}</span>
               ))}
             </div>
             <div className="flex flex-col gap-[1px] mt-[1px]">
