@@ -32,10 +32,12 @@ function MainOverlayContent() {
     setupRealtime()
 
     const reconnect = setInterval(() => setupRealtime(), 25000)
+    const poll = setInterval(() => loadTeams(), 5000)
 
     return () => {
       if (channelRef.current) supabase.removeChannel(channelRef.current)
       clearInterval(reconnect)
+      clearInterval(poll)
     }
   }, [matchId])
 
