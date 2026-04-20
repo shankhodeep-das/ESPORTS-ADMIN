@@ -57,21 +57,20 @@ function MainOverlayContent() {
         });
       });
     })
-    .on('postgres_changes', { 
-      event: 'UPDATE', 
-      schema: 'public', 
-      table: 'players' 
-    }, (payload) => {
-      // Sync player alive status instantly
-      setTeams(prev => prev.map(t => ({
-        ...t,
-        players: t.players?.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p)
-      })));
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'teams'
+    }, () => {
+      fetchTeams()
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
-    .subscribe((status) => {
-      console.log("Realtime status:", status); // Check your console to ensure it says 'SUBSCRIBED'
-    });
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'players'
+    }, () => {
+      fetchTeams()
+    })
 }
   async function fetchAll() {
     if (booyahDeclared.current) return
