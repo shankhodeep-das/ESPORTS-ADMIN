@@ -292,8 +292,7 @@ function MainOverlayContent() {
                 ? ((kills + alivePl) / totalKillsAlive * 100).toFixed(2)
                 : "0.0";
 
-              const rankColors = ['#FFD700', '#C8C8C8', '#cd7f32', '#e05252']
-              const rc = rankColors[index] || '#e05252'
+              const themeColor = '#FFD700';
 
               return (
                 <div
@@ -311,7 +310,7 @@ function MainOverlayContent() {
                     WebkitBackdropFilter: 'blur(12px)',
                     borderRadius: '4px', // Optional: softens the edges of the cards
                     // Add a subtle bottom border to the CARD ONLY if desired
-                    borderBottom: `2px solid ${rc}66`, 
+                    borderBottom: `2px solid ${themeColor}66`, 
                   }}
                 >
                   {/* Left rank accent line */}
@@ -319,7 +318,7 @@ function MainOverlayContent() {
                     position: 'absolute',
                     left: 0, top: 0, bottom: 0,
                     width: 3,
-                    background: rc,
+                    background: themeColor,
                     borderRadius: '4px 0 0 4px'
                   }}/>
 
@@ -327,8 +326,8 @@ function MainOverlayContent() {
                     <div style={{
                       width: 28, height: 28,
                       borderRadius: 4,
-                      background: `${rc}22`,
-                      border: `1px solid ${rc}44`,
+                      background: `${themeColor}22`,
+                      border: `1px solid ${themeColor}44`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
                       marginLeft: 6,
@@ -396,7 +395,7 @@ function MainOverlayContent() {
                           height: i < alivePl ? 28 : 28,
                           borderRadius: '2px 2px 1px 1px',
                           background: i < alivePl
-                            ? `linear-gradient(180deg,${rc} 0%,${rc}80 100%)`
+                            ? `linear-gradient(180deg,${themeColor} 0%,${themeColor}80 100%)`
                             : 'rgba(255,255,255,0.1)',
                           transition: 'height 0.3s ease, background 0.3s ease',
                           flexShrink: 0,
