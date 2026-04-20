@@ -257,7 +257,7 @@ function MainOverlayContent() {
               <span style={{ fontSize:9, letterSpacing:'3px', textTransform:'uppercase', color:'#c9a84c', fontWeight:700, fontFamily:"'Barlow Condensed',sans-serif" }}>Match Points</span>
             </div>
             <div className="grid items-center px-2 py-[7px]" style={{ gridTemplateColumns:'42px 1fr 44px 54px', background:'linear-gradient(90deg,#b8974a 0%,#e8c96a 40%,#c9a84c 100%)', cursor:'grab' }} onMouseDown={startDrag}>
-              {['RANK','TEAM','  KILLS','ALIVE'].map((h) => (
+              {['RANK','TEAM','KILLS','ALIVE'].map((h) => (
                 <span key={h} style={{ fontSize:15, fontWeight:800, gap:21, color:'rgba(20,10,0,0.75)', fontFamily:"'Barlow Condensed',sans-serif" }}>{h}</span>
               ))}
             </div>
