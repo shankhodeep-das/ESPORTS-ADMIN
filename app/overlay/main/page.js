@@ -68,6 +68,15 @@ function MainOverlayContent() {
   function setupRealtime() {
     if (channelRef.current) supabase.removeChannel(channelRef.current)
 
+    let debounceTimer = null
+
+    function debouncedLoad() {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        loadTeams()
+      }, 300)
+    }
+
     channelRef.current = supabase
       .channel(`overlay-live-${Date.now()}`)
       .on('postgres_changes', {
@@ -75,14 +84,14 @@ function MainOverlayContent() {
         schema: 'public',
         table: 'teams'
       }, () => {
-        loadTeams()
+        debouncedLoad()
       })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'players'
       }, () => {
-        loadTeams()
+        debouncedLoad()
       })
       .on('postgres_changes', {
         event: '*',
