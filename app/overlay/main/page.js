@@ -22,61 +22,57 @@ function MainOverlayContent() {
   const dragOffset = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
-    // Initial fetch
     fetchAll()
     setupRealtime()
 
-    // Reconnect logic
+    // ══ RECONNECT ONLY ══
+    // We removed the 4-second 'poll' because it causes the lagging data issue.
     const reconnect = setInterval(() => setupRealtime(), 25000)
 
     return () => {
       if (channelRef.current) supabase.removeChannel(channelRef.current)
       clearInterval(reconnect)
-      // Note: Polling interval is COMPLETELY removed to prevent "jumps"
     }
   }, [matchId])
 
   function setupRealtime() {
-    if (channelRef.current) supabase.removeChannel(channelRef.current)
-    
-    channelRef.current = supabase
-      .channel(`overlay-live-${Date.now()}`)
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'teams' 
-      }, (payload) => {
-        // ══ ABSOLUTE UPDATE LOGIC ══
-        setTeams(currentTeams => {
-          return currentTeams.map(team => {
-            if (team.id === payload.new.id) {
-              // CRITICAL: We preserve the 'players' array because the 
-              // payload update doesn't include nested relations!
-              return { 
-                ...team, 
-                ...payload.new, 
-                players: team.players // Keep the players we already have
-              };
-            }
-            return team;
-          });
+  if (channelRef.current) supabase.removeChannel(channelRef.current)
+  
+  // Use a unique channel name every time to force a fresh connection
+  channelRef.current = supabase
+    .channel(`overlay-live-${Date.now()}`)
+    .on('postgres_changes', { 
+      event: 'UPDATE', 
+      schema: 'public', 
+      table: 'teams' 
+    }, (payload) => {
+      // Logic: If the new kill count is different from what we have, force update.
+      setTeams(currentTeams => {
+        return currentTeams.map(team => {
+          if (team.id === payload.new.id) {
+            // Keep existing nested players, but take everything else from the fresh payload
+            return { ...team, ...payload.new, players: team.players };
+          }
+          return team;
         });
-      })
-      .on('postgres_changes', { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'players' 
-      }, (payload) => {
-        // Update specific player status instantly
-        setTeams(prev => prev.map(t => ({
-          ...t,
-          players: t.players?.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p)
-        })));
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
-      .subscribe()
-  }
-
+      });
+    })
+    .on('postgres_changes', { 
+      event: 'UPDATE', 
+      schema: 'public', 
+      table: 'players' 
+    }, (payload) => {
+      // Sync player alive status instantly
+      setTeams(prev => prev.map(t => ({
+        ...t,
+        players: t.players?.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p)
+      })));
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'overlay_settings' }, () => fetchSettings())
+    .subscribe((status) => {
+      console.log("Realtime status:", status); // Check your console to ensure it says 'SUBSCRIBED'
+    });
+}
   async function fetchAll() {
     if (booyahDeclared.current) return
     await fetchSettings()
@@ -101,15 +97,7 @@ function MainOverlayContent() {
       if (!liveMatch) return
       liveMatchId = liveMatch.id
     }
-
-    // ══ CACHE BUSTING ══
-    // Fetching from server directly using .order() and no-cache logic
-    const { data } = await supabase
-      .from('teams')
-      .select('*, players(*)')
-      .eq('match_id', liveMatchId)
-      .order('id', { ascending: true });
-
+    const { data, error } = await supabase.from('teams').select('*, players(*)').eq('match_id', liveMatchId).order('id', { ascending: true });
     if (data) {
       setTeams(data)
       const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
@@ -124,7 +112,16 @@ function MainOverlayContent() {
     setMatchPoints(mp || [])
   }
 
-  // --- UI Logic ---
+  async function checkWinner(mId) {
+    const { data: winnerTeam } = await supabase.from('teams').select('*').eq('match_id', mId).eq('placement', 1).single()
+    if (winnerTeam) {
+      booyahDeclared.current = true
+      setWinner(winnerTeam)
+      setOverlayState('booyah')
+    }
+  }
+
+  // Derived state for UI
   const teamsWithPoints = teams.map(team => {
     const mp = matchPoints.find(p => p.team_id === team.id)
     return { ...team, matchTotal: mp?.total_points ?? 0 }
@@ -132,10 +129,19 @@ function MainOverlayContent() {
 
   const aliveTeams = teams.filter(t => t.players?.some(p => p.alive)).sort((a, b) => b.total_kills - a.total_kills)
 
+  function startDrag(e) {
+    dragging.current = 'leaderboard'
+    dragOffset.current = { x: e.clientX - leaderboardPos.x, y: e.clientY - leaderboardPos.y }
+  }
+  function onMouseMove(e) {
+    if (dragging.current === 'leaderboard') setLeaderboardPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
+  }
+  function stopDrag() { dragging.current = null }
+
   const getRankColor = (rank) => rank === 1 ? '#FFD700' : rank === 2 ? '#D4D4D4' : rank === 3 ? '#cd7f32' : 'rgba(180,190,210,0.5)'
 
   if (overlayState === 'booyah') {
-    return <main className="min-h-screen bg-black flex items-center justify-center text-white"><h1>BOOYAH! {winner?.name}</h1></main>
+      return <main className="min-h-screen bg-black flex items-center justify-center text-white"><h1>BOOYAH! {winner?.name}</h1></main>
   }
 
   return (
@@ -145,28 +151,44 @@ function MainOverlayContent() {
         html, body { background: transparent !important; margin: 0; padding: 0; overflow: hidden; }
       `}</style>
 
-      <main className="min-h-screen bg-transparent relative" onMouseMove={(e) => {
-        if (dragging.current === 'leaderboard') setLeaderboardPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
-      }} onMouseUp={() => { dragging.current = null }}>
+      <main className="min-h-screen bg-transparent relative" onMouseMove={onMouseMove} onMouseUp={stopDrag}>
 
-        {/* ══ FINAL 4 ══ */}
+        {/* ══ FINAL 4 — PRESERVED UI + WEIGHTED LOGIC ══ */}
         {overlayState === 'final4' && (
           <div style={{ position: 'absolute', top: 10, left: 200, right: 200, zIndex: 100 }}>
             <div style={{ display: 'flex', height: 56, gap: 12, background: 'transparent' }}>
               {aliveTeams.map((team) => {
                 const alivePl = team.players?.filter(p => p.alive).length ?? 0
+                const totalPl = team.players?.length ?? 4
+                
+                // Weighted logic: Alive players power vs Kills
                 const teamStrength = Math.pow(alivePl, 2.5) + (team.total_kills * 0.1);
-                const totalStrength = aliveTeams.reduce((acc, t) => acc + (Math.pow(t.players?.filter(p => p.alive).length ?? 0, 2.5) + (t.total_kills * 0.1)), 0);
+                const totalStrength = aliveTeams.reduce((acc, t) => {
+                  const tAlive = t.players?.filter(p => p.alive).length ?? 0;
+                  return acc + (Math.pow(tAlive, 2.5) + (t.total_kills * 0.1));
+                }, 0);
+                
                 const winPct = totalStrength > 0 ? ((teamStrength / totalStrength) * 100).toFixed(0) : "0";
+                const themeColor = '#FFD700'
 
                 return (
-                  <div key={team.id} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', position: 'relative', background: 'rgba(8,4,4,0.88)', backdropFilter: 'blur(12px)', borderRadius: '4px', borderBottom: `2px solid #FFD70066` }}>
+                  <div key={team.id} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', position: 'relative', background: 'rgba(8,4,4,0.88)', backdropFilter: 'blur(12px)', borderRadius: '4px', borderBottom: `2px solid ${themeColor}66` }}>
+                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: themeColor, borderRadius: '4px 0 0 4px' }}/>
+                    <div style={{ width: 28, height: 28, borderRadius: 4, background: `${themeColor}22`, border: `1px solid ${themeColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 10, fontWeight: 900, color: themeColor }}>{team.name?.slice(0, 2).toUpperCase()}</span>
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', textTransform: 'uppercase' }}>{team.name}</div>
+                      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 15, fontWeight: 900, color: '#fff', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', fontFamily: "'Barlow Condensed',sans-serif" }}>Kill(s): {team.total_kills}</span>
-                        <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: '#FFD700' }}>Win: {winPct}%</span>
+                        <span style={{ fontSize: 12, fontWeight: 900, color: 'rgb(255, 255, 255)', fontFamily: "'Barlow Condensed',sans-serif" }}>Kill(s): {team.total_kills}</span>
+                        <div style={{ width: 1, height: 8, background: 'rgba(255,255,255,0.1)' }} />
+                        <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: themeColor }}>Win: {winPct}%</span>
                       </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28 }}>
+                      {Array.from({ length: totalPl }, (_, i) => (
+                        <div key={i} style={{ width: 6, height: 28, borderRadius: '2px', background: i < alivePl ? `linear-gradient(180deg,${themeColor} 0%,${themeColor}80 100%)` : 'rgba(255,255,255,0.1)' }}/>
+                      ))}
                     </div>
                   </div>
                 )
@@ -175,30 +197,35 @@ function MainOverlayContent() {
           </div>
         )}
 
-        {/* ══ LEADERBOARD ══ */}
+        {/* ══ LEADERBOARD — PRESERVED UI ══ */}
         {overlayState === 'leaderboard' && (
           <div className="absolute" style={{ left: leaderboardPos.x, top: leaderboardPos.y, width: leaderboardSize.width, zIndex: 50 }}>
-             <div className="grid px-2 py-[7px]" style={{ gridTemplateColumns:'42px 1fr 44px 54px', background:'linear-gradient(90deg,#b8974a 0%,#e8c96a 40%,#c9a84c 100%)', cursor:'grab' }} onMouseDown={(e) => {
-               dragging.current = 'leaderboard'
-               dragOffset.current = { x: e.clientX - leaderboardPos.x, y: e.clientY - leaderboardPos.y }
-             }}>
+             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 12px', background:'linear-gradient(90deg,rgba(10,8,4,0.98),rgba(20,15,5,0.95))', borderLeft:'3px solid #c9a84c' }}>
+               <span style={{ fontSize:9, letterSpacing:'3px', textTransform:'uppercase', color:'#c9a84c', fontWeight:700, fontFamily:"'Barlow Condensed',sans-serif" }}>Match Points</span>
+             </div>
+             <div className="grid items-center px-2 py-[7px]" style={{ gridTemplateColumns:'42px 1fr 44px 54px', background:'linear-gradient(90deg,#b8974a 0%,#e8c96a 40%,#c9a84c 100%)', cursor:'grab' }} onMouseDown={startDrag}>
                {['RANK','TEAM','ELIMS','ALIVE'].map((h) => <span key={h} style={{ fontSize:9, fontWeight:800, color:'rgba(20,10,0,0.75)', fontFamily:"'Barlow Condensed',sans-serif" }}>{h}</span>)}
              </div>
              <div className="flex flex-col gap-[1px] mt-[1px]">
-               {teamsWithPoints.map((team, index) => (
-                 <div key={team.id} className="grid items-center" style={{ gridTemplateColumns:'42px 1fr 44px 54px', background: 'rgba(12,9,4,0.96)', padding:'6px 0', borderLeft:`3px solid ${getRankColor(index + 1)}` }}>
-                   <div className="text-center" style={{ color:getRankColor(index+1), fontWeight:800 }}>{index+1}</div>
-                   <div className="px-2" style={{ fontSize:14, fontWeight:800, color:'#f0ece0', textTransform:'uppercase' }}>{team.name}</div>
-                   <div className="text-center" style={{ color:'#fff', fontWeight:800 }}>{team.total_kills}</div>
-                   <div className="flex gap-1 justify-center">
-                      {(team.players?.filter(p => p.alive).length ?? 0) === 0 ? <span style={{color:'#ff4444', fontSize:8}}>ELIM</span> : 
-                        Array.from({ length: 4 }).map((_, i) => (
-                          <div key={i} style={{ width: 4, height: 14, background: i < (team.players?.filter(p => p.alive).length ?? 0) ? '#e8c96a' : 'rgba(255,255,255,0.1)' }} />
-                        ))
-                      }
+               {teamsWithPoints.map((team, index) => {
+                 const rank = index + 1
+                 const alivePlayers = team.players?.filter(p => p.alive).length ?? 0
+                 const isElim = alivePlayers === 0
+                 return (
+                   <div key={team.id} className="grid items-center" style={{ gridTemplateColumns:'42px 1fr 44px 54px', background: isElim ? 'rgba(20,5,5,0.9)' : 'rgba(12,9,4,0.96)', padding:'6px 0', borderLeft:`3px solid ${getRankColor(rank)}` }}>
+                     <div className="text-center"><span style={{ color:getRankColor(rank), fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif" }}>{rank}</span></div>
+                     <div className="px-2"><p style={{ fontSize:14, fontWeight:800, color:'#f0ece0', fontFamily:"'Barlow Condensed',sans-serif", textTransform:'uppercase' }}>{team.name}</p></div>
+                     <div className="text-center"><span style={{ color:'#fff', fontWeight:800 }}>{team.total_kills}</span></div>
+                     <div className="flex gap-1 justify-center">
+                       {isElim ? <span style={{ color:'#ff4444', fontSize:8 }}>ELIM</span> : 
+                         Array.from({ length: 4 }).map((_, i) => (
+                           <div key={i} style={{ width: 4, height: 14, background: i < alivePlayers ? '#e8c96a' : 'rgba(255,255,255,0.1)' }} />
+                         ))
+                       }
+                     </div>
                    </div>
-                 </div>
-               ))}
+                 )
+               })}
              </div>
           </div>
         )}
