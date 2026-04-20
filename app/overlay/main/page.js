@@ -18,7 +18,7 @@ function MainOverlayContent() {
   const matchIdRef = useRef(matchId)
 
   const [leaderboardPos, setLeaderboardPos] = useState({ x: 20, y: 20 })
-  const [leaderboardSize, setLeaderboardSize] = useState({ width: 420, height: 600 })
+  const [leaderboardSize, setLeaderboardSize] = useState({ width: 320, height: 600 })
   const dragging = useRef(null)
   const dragOffset = useRef({ x: 0, y: 0 })
 
