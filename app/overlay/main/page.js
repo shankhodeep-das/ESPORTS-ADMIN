@@ -28,18 +28,37 @@ function MainOverlayContent() {
   }, [matchId])
 
   useEffect(() => {
-    fetchAll()
-    setupRealtime()
+      fetchAll()
+      setupRealtime()
 
-    const reconnect = setInterval(() => setupRealtime(), 25000)
-    const poll = setInterval(() => loadTeams(), 5000)
+      const reconnect = setInterval(() => setupRealtime(), 25000)
+    
+      const poll = setInterval(async () => {
+        let liveMatchId = matchIdRef.current
+        if (!liveMatchId) {
+          const { data: liveMatch } = await supabase.from('matches').select('*').eq('status', 'live').limit(1).single()
+          if (!liveMatch) return
+          liveMatchId = liveMatch.id
+        }
+        const { data } = await supabase
+          .from('teams')
+          .select('*, players(*)')
+          .eq('match_id', liveMatchId)
+          .order('id', { ascending: true })
+        if (data) {
+          setTeams(data)
+          const aliveCount = data.filter(t => t.players?.some(p => p.alive)).length
+          if (aliveCount <= 4 && aliveCount > 0) setOverlayState('final4')
+          else setOverlayState('leaderboard')
+        }
+      }, 5000)
 
-    return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current)
-      clearInterval(reconnect)
-      clearInterval(poll)
-    }
-  }, [matchId])
+      return () => {
+        if (channelRef.current) supabase.removeChannel(channelRef.current)
+        clearInterval(reconnect)
+        clearInterval(poll)
+      }
+    }, [matchId])
 
   // Extracted so both realtime handlers and fetchTeams can call it
   async function loadTeams() {
