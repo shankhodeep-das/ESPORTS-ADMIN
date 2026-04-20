@@ -44,7 +44,13 @@ function MainOverlayContent() {
     if (channelRef.current) supabase.removeChannel(channelRef.current)
     channelRef.current = supabase
       .channel(`overlay-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchAll())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, (payload) => {
+        setTeams(prevTeams =>
+          prevTeams.map(team =>
+            team.id === payload.new.id ? { ...team, ...payload.new } : team
+          )
+        )
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => fetchAll())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
         if (payload.new.status === 'finished') checkWinner(payload.new.id)
